@@ -50,7 +50,8 @@ module.exports = async function handler(req, res) {
   }
 
   // Try the chosen model first; if Groq has retired it or doesn't offer it, fall back to the next one.
-  const models = [...new Set([process.env.MODEL, "llama-3.3-70b-versatile", "openai/gpt-oss-120b", "llama-3.1-8b-instant"].filter(Boolean))];
+  // Llama 3.3 70B was shut down by Groq on Aug 16, 2026; gpt-oss-120b is its recommended replacement.
+  const models = [...new Set([process.env.MODEL, "openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"].filter(Boolean))];
   let upstream, detail = {};
   for (const model of models) {
     try {
@@ -59,7 +60,9 @@ module.exports = async function handler(req, res) {
         headers: { "content-type": "application/json", authorization: "Bearer " + process.env.GROQ_API_KEY },
         body: JSON.stringify({
           model,
-          max_tokens: 3000,
+          // gpt-oss models think before answering; keep that short and out of the reply so the answer has room.
+          ...(model.startsWith("openai/gpt-oss") ? { reasoning_effort: "low", include_reasoning: false } : {}),
+          max_completion_tokens: 8000,
           temperature: 0.7,
           stream: true,
           messages: [

@@ -25,7 +25,7 @@ Everything runs on free tiers: Vercel Hobby for hosting and Groq's free API for 
 
 Optional environment variables:
 
-- `MODEL`: the Groq model to use (default `llama-3.3-70b-versatile`)
+- `MODEL`: the Groq model to use (default `openai/gpt-oss-120b`)
 - `REQUESTS_PER_DAY`: server-side requests per visitor per day (default 8: 5 digs plus taste summaries)
 
 The GitHub Pages copy (xeniadobonyi.github.io/deepcuts) has no server, so it shows the sample dig only. Share the Vercel address instead.

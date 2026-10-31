@@ -312,6 +312,7 @@ function normalizePicks(res) {
 
 function parseJSONLoose(t) {
   t = String(t || "").replace(/<think>[\s\S]*?<\/think>/g, "");
+  if (!t.trim()) throw { code: "empty_completion" };
   try { return JSON.parse(t); } catch {}
   const tidy = (x) => x.replace(/,\s*([\]}])/g, "$1");
   try { return JSON.parse(tidy(t)); } catch {}
@@ -320,7 +321,7 @@ function parseJSONLoose(t) {
   const f = t.match(/```(?:json)?\s*([\s\S]*?)```/); if (f) { try { return JSON.parse(f[1]); } catch {} }
   const s = t.search(/[\[{]/), e = Math.max(t.lastIndexOf("]"), t.lastIndexOf("}"));
   if (s >= 0 && e > s) { try { return JSON.parse(t.slice(s, e + 1)); } catch {} }
-  throw { code: "invalid_json" };
+  throw { code: "invalid_json", text: t.trim().slice(0, 140) };
 }
 
 async function askClaude(prompt, { signal, onText } = {}) {
@@ -501,6 +502,7 @@ const ERR = {
   invalid_json: "The dig came back in the wrong shape. Press Dig again.",
   refused: "That request couldn't be answered. Try different records.",
   sampling_disabled: "Claude isn't available for this account, so only the sample dig is shown.",
+  empty_completion: "The AI sent back an empty answer. Press Dig again.",
   no_ai: "Live digs aren't switched on for this address yet. The sample dig below shows how it works.",
   bad_key: "That API key wasn't accepted. Check it in the Claude Console, then save it again.",
   network: "Couldn't reach Claude. Check your connection and press Dig again.",
@@ -559,7 +561,8 @@ $("digForm").addEventListener("submit", async (e) => {
     else {
       console.error("Dig failed", err);
       const known = err?.code && err.code !== "upstream_error" ? ERR[err.code] : "";
-      setStatus(known || (err?.message ? "The dig didn't work: " + err.message : "Something went wrong. Press Dig to try again."), true);
+      const peek = err?.code === "invalid_json" && err.text ? " It began: \u201c" + err.text.slice(0, 140) + "\u2026\u201d" : "";
+      setStatus((known ? known + peek : "") || (err?.message ? "The dig didn't work: " + err.message : "Something went wrong. Press Dig to try again."), true);
     }
   } finally {
     $("digBtn").disabled = false; $("stopBtn").hidden = true;
