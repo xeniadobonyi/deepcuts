@@ -211,7 +211,18 @@ const EXAMPLE = {
 
 const $ = (id) => document.getElementById(id);
 const MAX_SEEDS = 3;
-const SEED_EXAMPLES = ["e.g. Madvillain – Madvillainy", "e.g. Joy Division – Unknown Pleasures", "e.g. Isaac Hayes – Hot Buttered Soul", "e.g. Kate Bush – Hounds of Love", "e.g. Fela Kuti – Zombie"];
+const SEED_POOL = [
+  "A Tribe Called Quest – The Low End Theory",
+  "Wire – Pink Flag",
+  "Ariel Pink's Haunted Graffiti – Before Today",
+  "Bobbi Humphrey – Blacks and Blues",
+  "Daft Punk – Discovery",
+  "Curtis Mayfield – Curtis",
+  "Minnie Riperton – Come to My Garden",
+  "Labi Siffre – Crying Laughing Loving Lying"
+];
+const SEED_EXAMPLES = SEED_POOL.map((s) => [Math.random(), "e.g. " + s]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
+document.getElementById("seed1").placeholder = SEED_EXAMPLES[0];
 const seeds = () => [...document.querySelectorAll("#seedList input")];
 function addSeedField(value, focus) {
   const n = seeds().length;
