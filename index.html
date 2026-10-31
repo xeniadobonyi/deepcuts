@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Deep Cuts learns your taste and digs for you: five records you probably haven't heard, and why.">
+<title>Deep Cuts</title>
+<style>[hidden]{display:none!important} img{max-width:100%} :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+<style>
+/* Layout: a plain text document, one column, hairline rules between records. Looks unstyled; spacing and type are tuned. */
+:root {
+  --bg: #ffffff;
+  --fg: #111111;
+  --muted: #6b6b6b;
+  --rule: #d9d9d9;
+  --link: #1a33d6;
+  --visited: #5b2a9e;
+  --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #121212; --fg: #e8e8e8; --muted: #9a9a9a; --rule: #333333; --link: #8ea8ff; --visited: #c3a2f2; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #121212; --fg: #e8e8e8; --muted: #9a9a9a; --rule: #333333; --link: #8ea8ff; --visited: #c3a2f2; color-scheme: dark; }
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.wrap { max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+.wrap > * + * { border-top: 1px solid var(--fg); padding-top: 22px; }
+.sec-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+header { display: flex; flex-direction: column; gap: 2px; }
+.brand { font-size: 15px; font-weight: 700; margin: 0; white-space: nowrap; }
+.tagline { margin: 0; max-width: 52ch; }
+.label { font-size: 15px; color: var(--muted); }
+header .label { order: 3; }
+a { color: var(--link); text-underline-offset: 2px; }
+a:visited { color: var(--visited); }
+
+form { display: flex; flex-direction: column; gap: 20px; }
+fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+legend { padding: 0; margin-bottom: 6px; }
+input[type=text] {
+  width: 100%; font: inherit; font-size: 16px; color: var(--fg); background: var(--bg);
+  border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; padding: 6px 0;
+}
+input[type=text]:focus { outline: none; border-bottom-color: var(--fg); }
+input[type=text]::placeholder { color: var(--muted); }
+button:focus-visible, a:focus-visible, input[type=range]:focus-visible { outline: 1px dotted var(--fg); outline-offset: 3px; }
+.range-row { display: flex; flex-direction: column; gap: 4px; }
+input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
+.range-ends { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+.range-now { color: var(--fg); }
+.actions { display: flex; gap: 16px; flex-wrap: wrap; align-items: baseline; }
+.btn {
+  font: inherit; font-weight: 700; color: var(--fg); background: transparent;
+  border: 1px solid var(--fg); border-radius: 0; padding: 6px 14px; cursor: pointer;
+}
+.btn:hover { background: var(--fg); color: var(--bg); }
+.btn:disabled { opacity: .4; cursor: default; background: transparent; color: var(--fg); }
+.btn.ghost { border: 0; padding: 0; font-weight: 400; text-decoration: underline; }
+.btn.ghost:hover { background: transparent; color: var(--fg); }
+.status { font-size: 13px; color: var(--muted); min-height: 1.4em; }
+.status.err { color: var(--fg); }
+
+.crate-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.crate-head h2 { font-size: 15px; font-weight: 700; margin: 0; }
+.example-flag { font-size: 13px; color: var(--muted); }
+.crate { display: flex; flex-direction: column; }
+.pick:first-child { padding-top: 6px; }
+.pick:last-child { border-bottom: 0; padding-bottom: 0; }
+.pick { border-bottom: 1px solid var(--rule); padding-block: 18px; display: grid; grid-template-columns: 88px 1fr; column-gap: 16px; min-width: 0; }
+.pick-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sleeve { width: 88px; aspect-ratio: 1; max-width: 100%; border: 1px solid var(--rule); background: var(--sleeve, var(--rule)); display: flex; flex-direction: column; justify-content: space-between; padding: 6px; overflow: hidden; font-family: var(--mono); font-size: 9px; line-height: 1.25; color: #111; }
+.sleeve span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.sleeve b { font-weight: 700; }
+@media (max-width: 420px) { .pick { grid-template-columns: 64px 1fr; column-gap: 12px; } .sleeve { width: 64px; font-size: 7.5px; padding: 4px; } }
+.pick-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.pick-top > div { display: flex; flex-wrap: wrap; column-gap: 6px; align-items: baseline; }
+.artist { font-size: 15px; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
+.artist::after { content: " —"; font-weight: 400; }
+.album { font-style: italic; margin: 0; overflow-wrap: anywhere; }
+.meta { flex-basis: 100%; font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.thread { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.thread::before { content: "↳ "; }
+.why { margin: 0; max-width: 62ch; }
+.links { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; }
+.react { display: flex; gap: 14px; flex-wrap: wrap; }
+.chip { font: inherit; font-size: 13px; background: none; color: var(--muted); border: 0; padding: 0; cursor: pointer; }
+.chip { display: inline-flex; align-items: center; gap: 5px; }
+.chip svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.chip:hover { color: var(--fg); }
+.chip[aria-pressed="true"] { color: var(--fg); font-weight: 700; }
+.chip[aria-pressed="true"] svg { stroke-width: 2.2; }
+.chip[data-r="loved"][aria-pressed="true"] svg { fill: currentColor; }
+.profile { display: flex; flex-direction: column; gap: 12px; }
+.stats { display: flex; flex-wrap: wrap; gap: 4px 18px; font-family: var(--mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stats b { color: var(--fg); font-weight: 700; }
+.portrait { margin: 0; max-width: 62ch; font-style: italic; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: 13px; border: 1px solid var(--rule); padding: 1px 8px; }
+.facts { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 14px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.empty { color: var(--muted); margin: 0; max-width: 62ch; }
+@media (max-width: 420px) { .facts { grid-template-columns: 1fr; } .facts dd { margin-bottom: 6px; } }
+.past { display: flex; flex-direction: column; }
+.past details { border-bottom: 1px solid var(--rule); padding-block: 10px; }
+.past details:last-child { border-bottom: 0; }
+.past summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.past summary::-webkit-details-marker { display: none; }
+.past summary::before { content: "+ "; color: var(--muted); }
+.past details[open] summary::before { content: "− "; }
+.past summary .when { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.past summary .from { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.past ul { margin: 8px 0 4px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.past li { overflow-wrap: anywhere; }
+.past .mark { color: var(--muted); font-size: 13px; }
+.past .open-dig { margin-top: 6px; font-size: 13px; }
+.foot { font-size: 13px; color: var(--muted); margin: 0; max-width: 62ch; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="label">Five records a week · explained</span>
+    <h1 class="brand">Deep Cuts</h1>
+    <p class="tagline">Tell it three records you love. It digs out five you probably haven't heard, and tells you why.</p>
+  </header>
+
+  <form id="digForm" novalidate>
+    <h2 class="sec-title">Your taste</h2>
+    <fieldset>
+      <legend class="label">Three records you love (artist – album)</legend>
+      <input type="text" id="seed1" aria-label="First record" placeholder="e.g. Madvillain – Madvillainy" autocomplete="off">
+      <input type="text" id="seed2" aria-label="Second record" placeholder="e.g. Joy Division – Unknown Pleasures" autocomplete="off">
+      <input type="text" id="seed3" aria-label="Third record" placeholder="e.g. Isaac Hayes – Hot Buttered Soul" autocomplete="off">
+    </fieldset>
+    <fieldset>
+      <legend class="label">Mood or occasion (optional)</legend>
+      <input type="text" id="mood" placeholder="Rainy Sunday, late night, cooking…" autocomplete="off">
+    </fieldset>
+    <div class="range-row">
+      <label class="label" for="adv">How far should it dig? <span class="range-now" id="advNow"></span></label>
+      <input type="range" id="adv" min="1" max="5" step="1" value="3">
+      <div class="range-ends"><span>Close to home</span><span>Somewhere new</span></div>
+    </div>
+    <div class="actions">
+      <button class="btn" type="submit" id="digBtn">Dig for five</button>
+      <button class="btn ghost" type="button" id="stopBtn" hidden>Stop</button>
+    </div>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+  </form>
+
+  <section>
+    <h2 class="sec-title">Taste profile</h2>
+    <div class="profile" id="profile"></div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:14px">
+    <div class="crate-head">
+      <h2 id="crateTitle">This week's dig</h2>
+      <span class="example-flag" id="exampleFlag">(example)</span>
+    </div>
+    <div class="crate" id="crate"></div>
+  </section>
+
+  <section id="pastSec" hidden>
+    <h2 class="sec-title">Past digs</h2>
+    <div class="past" id="past"></div>
+  </section>
+
+  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Mark each record Loved, Not for me or Already know it. The next dig uses your reactions. Picks and details are AI-generated from music knowledge, so check credits on Discogs before quoting them.</p>
+</div>
+
+<script>
+const ADV = {
+  1: ["Close to home", "Stay very close to the seeds: same scenes, eras and sounds, but lesser-known records."],
+  2: ["Next door", "Mostly the same genres as the seeds, with one or two neighbouring styles."],
+  3: ["Across town", "Mix close matches with records from adjacent genres, linked by producers, samples, labels or scenes."],
+  4: ["Another city", "Lean adventurous: different genres or eras, each still joined to the seeds by a real, specific thread."],
+  5: ["Somewhere new", "Go far: unexpected genres, countries and decades, each joined to the seeds by one real, specific thread."]
+};
+
+const EXAMPLE = {
+  seeds: ["Madvillain – Madvillainy", "Joy Division – Unknown Pleasures", "Isaac Hayes – Hot Buttered Soul"],
+  picks: [
+    { artist: "Jaylib", album: "Champion Sound", year: "2003", label: "Stones Throw", thread: "Shared producer",
+      why: "Because you love Madvillainy, this is Madlib's next stop: a full album with J Dilla, released on the same label, Stones Throw. You get the same loose, dusty beats, this time traded between two of hip hop's great producers." },
+    { artist: "The Durutti Column", album: "The Return of the Durutti Column", year: "1980", label: "Factory", thread: "Same producer",
+      why: "Because you love Unknown Pleasures, you'll recognise the sound: Martin Hannett produced both records for Factory. Here that cold, echoing space surrounds Vini Reilly's quiet guitar pieces instead of a band." },
+    { artist: "Shuggie Otis", album: "Inspiration Information", year: "1974", label: "Epic", thread: "Soul crate staple",
+      why: "Because you love Hot Buttered Soul, this is another soul record built on lush, patient arrangements. Shuggie Otis made most of it himself, layering instruments and an early drum machine into something warm and dreamy." },
+    { artist: "Young Marble Giants", album: "Colossal Youth", year: "1980", label: "Rough Trade", thread: "Post-punk scene",
+      why: "Because you love Unknown Pleasures, this is post-punk from the same moment, stripped to almost nothing: organ, bass, a drum machine and a quiet voice. It's for when you love the space in Joy Division more than the noise." },
+    { artist: "Galt MacDermot", album: "Shapes of Rhythm", year: "1966", label: "Kilmarnock", thread: "Sample source",
+      why: "Because you love Madvillainy and its crate-dug loops, this is a record producers went digging for. Galt MacDermot's track \"Space\" became the loop behind Busta Rhymes' \"Woo Hah!! Got You All in Check\", and the whole album is tight, funky jazz." }
+  ]
+};
+
+const $ = (id) => document.getElementById(id);
+const seeds = [$("seed1"), $("seed2"), $("seed3")];
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+};
+let reactions = store.get("dc-reactions", {});
+let current = store.get("dc-last", null);
+let digHistory = store.get("dc-history", []);
+if (!Array.isArray(digHistory)) digHistory = [];
+if (!digHistory.length && current?.picks?.length) digHistory = [{ date: null, seeds: current.seeds || [], picks: current.picks }];
+let sample = null;
+let ctl = null;
+
+const keyOf = (p) => (p.artist + " — " + p.album).toLowerCase();
+const q = (p) => encodeURIComponent(p.artist + " " + p.album);
+
+function setAdvLabel() { $("advNow").textContent = "· " + ADV[$("adv").value][0]; }
+
+function linkEl(text, href) {
+  const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = text; return a;
+}
+
+function render(picks, isExample, fresh) {
+  const crate = $("crate"); crate.replaceChildren();
+  $("exampleFlag").hidden = !isExample;
+  $("crateTitle").textContent = isExample ? "A sample dig" : "Your dig";
+  picks.forEach((p) => {
+    const el = document.createElement("article"); el.className = "pick" + (fresh ? " fresh" : "");
+    const top = document.createElement("div"); top.className = "pick-top";
+    const names = document.createElement("div"); names.style.minWidth = "0";
+    const h = document.createElement("h3"); h.className = "artist"; h.textContent = p.artist;
+    const al = document.createElement("p"); al.className = "album"; al.textContent = p.album;
+    const meta = document.createElement("div"); meta.className = "meta";
+    meta.textContent = [p.year, p.label].filter(Boolean).join(" · ");
+    names.append(h, al); if (meta.textContent) names.append(meta);
+    top.append(names);
+    if (p.thread) { const t = document.createElement("span"); t.className = "thread"; t.textContent = p.thread; top.append(t); }
+    const why = document.createElement("p"); why.className = "why";
+    const whyLabel = document.createElement("strong"); whyLabel.textContent = "Why this record: ";
+    why.append(whyLabel, document.createTextNode(p.why || ""));
+    const links = document.createElement("div"); links.className = "links";
+    links.append(
+      linkEl("YouTube", "https://www.youtube.com/results?search_query=" + q(p) + "+full+album"),
+      linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
+      linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
+      linkEl("Bandcamp", "https://bandcamp.com/search?q=" + q(p)),
+      linkEl("Discogs", "https://www.discogs.com/search/?type=all&q=" + q(p))
+    );
+    const react = document.createElement("div"); react.className = "react";
+    const k = keyOf(p);
+    const ICONS = {
+      loved: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/>',
+      nope: '<circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/>',
+      known: '<path d="M5 12.5l4.5 4.5L19 7.5"/>'
+    };
+    [["loved", "Loved it"], ["nope", "Not for me"], ["known", "Already know it"]].forEach(([val, txt]) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.dataset.r = val;
+      b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[val] + '</svg>';
+      b.append(document.createTextNode(txt));
+      b.setAttribute("aria-pressed", reactions[k]?.r === val ? "true" : "false");
+      b.onclick = () => {
+        if (reactions[k]?.r === val) delete reactions[k]; else reactions[k] = { r: val, artist: p.artist, album: p.album };
+        store.set("dc-reactions", reactions); renderHistory(); renderProfile();
+        react.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", "false"));
+        if (reactions[k]) b.setAttribute("aria-pressed", "true");
+      };
+      react.append(b);
+    });
+    const sleeve = document.createElement("div"); sleeve.className = "sleeve"; sleeve.setAttribute("aria-hidden", "true");
+    let h2 = 0; for (const c of k) h2 = (h2 * 31 + c.charCodeAt(0)) >>> 0;
+    sleeve.style.setProperty("--sleeve", `hsl(${h2 % 360} 22% 78%)`);
+    const sa = document.createElement("span"); const sb = document.createElement("b"); sb.textContent = p.artist; sa.append(sb);
+    const sAl = document.createElement("span"); sAl.textContent = p.album;
+    sleeve.append(sa, sAl);
+    const body = document.createElement("div"); body.className = "pick-body";
+    body.append(top, why, links, react);
+    el.append(sleeve, body);
+    crate.append(el);
+  });
+}
+
+function setStatus(msg, err) { const s = $("status"); s.textContent = msg; s.classList.toggle("err", !!err); }
+
+function buildPrompt(seedList, mood, adv) {
+  const byType = (t) => Object.values(reactions).filter((x) => x.r === t).map((x) => x.artist + " – " + x.album);
+  const loved = byType("loved"), nope = byType("nope"), known = byType("known");
+  const previous = [...new Set(digHistory.flatMap((d) => d.picks.map((p) => p.artist + " – " + p.album)))].slice(0, 80);
+  return [
+    "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
+    "Recommend exactly 5 albums for a listener who loves these records:",
+    ...seedList.map((s) => "- " + s),
+    mood ? "Mood or occasion: " + mood : "",
+    "How adventurous to be: " + ADV[adv][1],
+    store.get("dc-portrait", null)?.portrait ? "Their taste so far, in summary: " + store.get("dc-portrait", null).portrait : "",
+    loved.length ? "They loved these earlier picks (use them as extra taste signal): " + loved.join("; ") : "",
+    nope.length ? "They did not like these earlier picks (steer away from what they share): " + nope.join("; ") : "",
+    "Never recommend any of these, they already know them: " + [...seedList, ...known, ...previous].join("; "),
+    "Rules:",
+    "- Only real, released albums. Favour lesser-known records, deep cuts and underrated albums over famous classics.",
+    "- Each pick must connect to the seeds through one specific, real thread: a shared producer, engineer or session player, a sample, a label, a scene, or a direct influence.",
+    "- Accuracy matters more than detail. Only state facts (years, labels, personnel, samples) you are highly confident are correct. If unsure of the year or label, use null. Never invent credits or samples.",
+    "- \"why\": 2 or 3 plain, specific sentences addressed to the listener. Start with \"Because you love <one of their records>,\" then name the specific thread that links them, then say what this record sounds like and what they will get from it.",
+    "- \"thread\": 2 to 3 words naming the connection type, e.g. \"Shared producer\", \"Sample source\", \"Same label\", \"Scene\", \"Influence\".",
+    "- Spread the 5 picks across different artists and, where the seeds allow, different genres.",
+    'Reply with only a JSON array of 5 objects: [{"artist": string, "album": string, "year": string|null, "label": string|null, "thread": string, "why": string}]'
+  ].filter(Boolean).join("\n");
+}
+
+const ERR = {
+  not_granted: "Live digging needs permission to use Claude. Reload the page to be asked again.",
+  rate_limited: "Too many digs in a short time. Try again in a few minutes.",
+  session_expired: "Your session has expired. Sign in to Claude again, then dig.",
+  invalid_json: "The dig came back in the wrong shape. Press Dig again.",
+  refused: "That request couldn't be answered. Try different records.",
+  sampling_disabled: "Claude isn't available for this account, so only the sample dig is shown."
+};
+
+$("digForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const seedList = seeds.map((s) => s.value.trim()).filter(Boolean);
+  if (seedList.length < 1) { setStatus("Add at least one record you love, as Artist – Album.", true); seeds[0].focus(); return; }
+  if (!sample) { setStatus("Live digging is coming soon. The sample dig below shows how it works.", true); return; }
+  const adv = $("adv").value, mood = $("mood").value.trim();
+  store.set("dc-form", { seeds: seeds.map((s) => s.value), mood, adv });
+  ctl = new AbortController();
+  $("digBtn").disabled = true; $("stopBtn").hidden = false;
+  setStatus("Digging through the crates… this can take up to a minute.");
+  try {
+    const res = await sample.json(buildPrompt(seedList, mood, adv), { signal: ctl.signal, cache: false });
+    const picks = (Array.isArray(res) ? res : []).filter((p) => p && p.artist && p.album).slice(0, 5)
+      .map((p) => ({ artist: String(p.artist), album: String(p.album), year: p.year ? String(p.year) : "", label: p.label ? String(p.label) : "", thread: p.thread ? String(p.thread) : "", why: p.why ? String(p.why) : "" }));
+    if (!picks.length) throw { code: "invalid_json" };
+    current = { picks, seeds: seedList };
+    store.set("dc-last", current);
+    digHistory.unshift({ date: new Date().toISOString(), seeds: seedList, picks });
+    digHistory = digHistory.slice(0, 30);
+    store.set("dc-history", digHistory);
+    renderHistory();
+    renderProfile();
+    render(picks, false, true);
+    setStatus("Five records dug. Mark what you think, then dig again for a sharper set.");
+    $("digBtn").textContent = "Dig again";
+  } catch (err) {
+    if (err?.code === "cancelled") setStatus("Stopped.");
+    else setStatus(ERR[err?.code] || "Something went wrong reaching Claude. Press Dig to try again.", true);
+  } finally {
+    $("digBtn").disabled = false; $("stopBtn").hidden = true;
+  }
+});
+$("stopBtn").onclick = () => ctl?.abort();
+$("adv").addEventListener("input", setAdvLabel);
+
+// Initial state
+const saved = store.get("dc-form", null);
+if (saved) { saved.seeds.forEach((v, i) => { if (seeds[i]) seeds[i].value = v || ""; }); $("mood").value = saved.mood || ""; $("adv").value = saved.adv || 3; }
+setAdvLabel();
+if (current?.picks?.length) { render(current.picks, false, false); $("digBtn").textContent = "Dig again"; }
+else render(EXAMPLE.picks, true, false);
+renderHistory();
+renderProfile();
+
+function renderHistory() {
+  const box = $("past"); box.replaceChildren();
+  $("pastSec").hidden = !digHistory.length;
+  const MARK = { loved: " ♥ loved", nope: " · not for me", known: " · already knew it" };
+  digHistory.forEach((d, i) => {
+    const det = document.createElement("details");
+    const sum = document.createElement("summary");
+    const from = document.createElement("span"); from.className = "from";
+    from.textContent = d.seeds?.length ? "From " + d.seeds.join(", ") : "Earlier dig";
+    const when = document.createElement("span"); when.className = "when";
+    when.textContent = d.date ? new Date(d.date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "";
+    sum.append(from, when);
+    const ul = document.createElement("ul");
+    d.picks.forEach((p) => {
+      const li = document.createElement("li");
+      const b = document.createElement("b"); b.textContent = p.artist;
+      const r = reactions[keyOf(p)]?.r;
+      const m = document.createElement("span"); m.className = "mark"; m.textContent = r ? MARK[r] : "";
+      li.append(b, document.createTextNode(" — "), Object.assign(document.createElement("i"), { textContent: p.album }), m);
+      ul.append(li);
+    });
+    const open = document.createElement("button"); open.type = "button"; open.className = "btn ghost open-dig"; open.textContent = "Show this dig above";
+    open.onclick = () => { current = { picks: d.picks, seeds: d.seeds }; render(d.picks, false, false); $("crateTitle").scrollIntoView({ behavior: "smooth", block: "start" }); };
+    det.append(sum, ul, open);
+    if (i === 0) det.open = false;
+    box.append(det);
+  });
+}
+
+function pickIndex() {
+  const idx = {};
+  [...EXAMPLE.picks, ...digHistory.flatMap((d) => d.picks)].forEach((p) => { idx[keyOf(p)] = p; });
+  return idx;
+}
+
+function tally(list, fn) {
+  const c = {};
+  list.forEach((p) => { const v = fn(p); if (v) c[v] = (c[v] || 0) + 1; });
+  return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => n > 1 ? k + " (" + n + ")" : k).join(", ");
+}
+
+function renderProfile() {
+  const box = $("profile"); box.replaceChildren();
+  const idx = pickIndex();
+  const shownKeys = new Set(digHistory.flatMap((d) => d.picks.map(keyOf)));
+  const shownTotal = digHistory.reduce((n, d) => n + d.picks.length, 0);
+  const repeats = shownTotal - shownKeys.size;
+  const rs = Object.entries(reactions);
+  const by = (t) => rs.filter(([, v]) => v.r === t).map(([k, v]) => idx[k] || { artist: v.artist, album: v.album });
+  const loved = by("loved"), nope = by("nope"), known = by("known");
+
+  const stats = document.createElement("div"); stats.className = "stats";
+  [[shownKeys.size, "records shown"], [loved.length, "loved"], [nope.length, "not for me"], [known.length, "already known"], [repeats, "repeats"]]
+    .forEach(([n, t]) => { const s = document.createElement("span"); const b = document.createElement("b"); b.textContent = n; s.append(b, " " + t); stats.append(s); });
+  box.append(stats);
+
+  if (!rs.length) {
+    const e = document.createElement("p"); e.className = "empty";
+    e.textContent = "Mark records as Loved, Not for me or Already know it. Your profile builds from those reactions, and every dig uses it.";
+    box.append(e); return;
+  }
+
+  const saved = store.get("dc-portrait", null);
+  if (saved?.portrait) {
+    const p = document.createElement("p"); p.className = "portrait"; p.textContent = saved.portrait; box.append(p);
+    if (Array.isArray(saved.tags) && saved.tags.length) {
+      const tg = document.createElement("div"); tg.className = "tags";
+      saved.tags.slice(0, 6).forEach((t) => { const s = document.createElement("span"); s.className = "tag"; s.textContent = String(t); tg.append(s); });
+      box.append(tg);
+    }
+  }
+
+  const decade = (p) => { const y = parseInt(p.year, 10); return y > 1900 ? Math.floor(y / 10) * 10 + "s" : ""; };
+  const rows = [
+    ["Eras you love", tally(loved, decade)],
+    ["Labels you love", tally(loved, (p) => p.label)],
+    ["Connections that land", tally(loved, (p) => p.thread)],
+    ["Loved", loved.slice(0, 6).map((p) => p.artist).join(", ")],
+    ["Not for you", nope.slice(0, 6).map((p) => p.artist).join(", ")]
+  ].filter(([, v]) => v);
+  if (rows.length) {
+    const dl = document.createElement("dl"); dl.className = "facts";
+    rows.forEach(([k, v]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); });
+    box.append(dl);
+  }
+
+  const act = document.createElement("div"); act.className = "actions";
+  const btn = document.createElement("button"); btn.type = "button"; btn.className = "btn ghost"; btn.id = "portraitBtn";
+  btn.textContent = saved?.portrait ? "Update my taste summary" : "Describe my taste";
+  const note = document.createElement("span"); note.className = "status";
+  if (rs.length < 3) { btn.disabled = true; note.textContent = "React to at least 3 records first."; }
+  btn.onclick = async () => {
+    if (!sample) { note.textContent = "Taste summaries are coming soon."; return; }
+    btn.disabled = true; note.textContent = "Reading your reactions…";
+    const fmt = (l) => l.map((p) => p.artist + " – " + p.album + (p.year ? " (" + p.year + (p.label ? ", " + p.label : "") + ")" : "")).join("; ") || "none";
+    try {
+      const res = await sample.json([
+        "Write a short music taste portrait for a listener, based only on their reactions to album recommendations.",
+        "Loved: " + fmt(loved), "Not for them: " + fmt(nope), "Already knew: " + fmt(known),
+        "Rules: 2 or 3 plain sentences in the second person, specific about sounds, eras, scenes or producers that appear in the lists. No flattery, no invented facts. Also give 3 to 5 short taste tags of 1 to 3 words.",
+        'Reply with only JSON: {"portrait": string, "tags": [string]}'
+      ].join("\n"), { cache: false });
+      if (!res || !res.portrait) throw { code: "invalid_json" };
+      store.set("dc-portrait", { portrait: String(res.portrait), tags: Array.isArray(res.tags) ? res.tags.map(String) : [] });
+      renderProfile();
+    } catch (err) {
+      btn.disabled = false;
+      note.textContent = err?.code === "cancelled" ? "" : (ERR[err?.code] || "Couldn't write the summary. Try again.");
+    }
+  };
+  act.append(btn, note); box.append(act);
+}
+
+(async () => {
+  try { sample = await window.claude?.use?.("sample"); } catch { sample = null; }
+  if (!sample) setStatus("Live digging is coming soon. Below is a sample dig to show how it works.");
+})();
+</script>
+
+</body>
+</html>
