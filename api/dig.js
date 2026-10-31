@@ -38,7 +38,7 @@ function delta(text) {
 
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return sendJSON(res, 405, { error: { message: "Use POST." } });
-  if (!process.env.GROQ_API_KEY) return sendJSON(res, 500, { error: { message: "Server is missing its API key." } });
+  if (!process.env.GROQ_API_KEY) return sendJSON(res, 500, { error: { message: "The server has no Groq key yet. Add GROQ_API_KEY in Vercel, then redeploy." } });
 
   const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "unknown";
   if (overLimit(ip)) return sendJSON(res, 429, { error: { message: "You've used today's free digs. Come back tomorrow." } });
@@ -49,30 +49,39 @@ module.exports = async function handler(req, res) {
     return sendJSON(res, 400, { error: { message: "Prompt missing or too long." } });
   }
 
-  let upstream;
-  try {
-    upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: "Bearer " + process.env.GROQ_API_KEY },
-      body: JSON.stringify({
-        model: process.env.MODEL || "llama-3.3-70b-versatile",
-        max_tokens: 3000,
-        temperature: 0.7,
-        stream: true,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-  } catch {
-    return sendJSON(res, 502, { error: { message: "Couldn't reach the AI service." } });
+  // Try the chosen model first; if Groq has retired it or doesn't offer it, fall back to the next one.
+  const models = [...new Set([process.env.MODEL, "llama-3.3-70b-versatile", "openai/gpt-oss-120b", "llama-3.1-8b-instant"].filter(Boolean))];
+  let upstream, detail = {};
+  for (const model of models) {
+    try {
+      upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: "Bearer " + process.env.GROQ_API_KEY },
+        body: JSON.stringify({
+          model,
+          max_tokens: 3000,
+          temperature: 0.7,
+          stream: true,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+    } catch {
+      return sendJSON(res, 502, { error: { message: "Couldn't reach the AI service." } });
+    }
+    if (upstream.ok) break;
+    detail = {};
+    try { detail = await upstream.json(); } catch {}
+    const msg = String(detail?.error?.message || "") + " " + String(detail?.error?.code || "");
+    const modelProblem = (upstream.status === 400 || upstream.status === 404) && /model/i.test(msg);
+    console.error("Groq error", upstream.status, model, msg.trim());
+    if (!modelProblem) break;
   }
 
   if (!upstream.ok) {
-    let detail = {};
-    try { detail = await upstream.json(); } catch {}
     // Groq's own limit is shared by every visitor: when it is used up, say so plainly.
     if (upstream.status === 429) return sendJSON(res, 429, { error: { message: "Today's free digs are used up. Come back tomorrow." } });
-    const status = upstream.status === 401 || upstream.status === 403 ? 500 : upstream.status;
-    return sendJSON(res, status, { error: { message: detail?.error?.message || "The AI service returned an error." } });
+    if (upstream.status === 401 || upstream.status === 403) return sendJSON(res, 500, { error: { message: "The server's Groq key wasn't accepted. Check GROQ_API_KEY in Vercel, then redeploy." } });
+    return sendJSON(res, upstream.status, { error: { message: detail?.error?.message || "The AI service returned an error." } });
   }
 
   res.statusCode = 200;
