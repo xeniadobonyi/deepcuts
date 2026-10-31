@@ -6,7 +6,7 @@ This is the first prototype, a single static page (`index.html`) hosted on GitHu
 
 ## What works
 
-- Enter up to three records you love, an optional mood, and how far to dig
+- Start a dig from up to three records you love, a mood, or both
 - A sample dig showing the format: five records, the connection to your taste, and links to YouTube, Spotify, Apple Music, Bandcamp and Discogs
 - Reactions (Loved it, Not for me, Already know it), past digs and a taste profile, saved in your browser
 

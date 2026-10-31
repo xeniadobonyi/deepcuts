@@ -135,7 +135,10 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
   </header>
 
   <form id="digForm" novalidate>
-    <h2 class="sec-title">Your taste</h2>
+    <div>
+      <h2 class="sec-title">Start a dig</h2>
+      <p class="label" style="margin:0">Start from records you love, a mood, or both.</p>
+    </div>
     <fieldset>
       <legend class="label">Up to three records you love (artist – album)</legend>
       <div class="seed-list" id="seedList">
@@ -144,14 +147,9 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <button type="button" class="btn ghost add-seed" id="addSeed">+ Add another record</button>
     </fieldset>
     <fieldset>
-      <legend class="label">Mood or occasion (optional)</legend>
-      <input type="text" id="mood" placeholder="Rainy Sunday, late night, cooking…" autocomplete="off">
+      <legend class="label">A mood or moment</legend>
+      <input type="text" id="mood" placeholder="e.g. rainy Sunday morning, late-night drive, cooking for friends" autocomplete="off">
     </fieldset>
-    <div class="range-row">
-      <label class="label" for="adv">How far should it dig? <span class="range-now" id="advNow"></span></label>
-      <input type="range" id="adv" min="1" max="5" step="1" value="3">
-      <div class="range-ends"><span>Close to home</span><span>Somewhere new</span></div>
-    </div>
     <div class="actions">
       <button class="btn" type="submit" id="digBtn">Dig for five</button>
       <button class="btn ghost" type="button" id="stopBtn" hidden>Stop</button>
@@ -237,7 +235,7 @@ let ctl = null;
 const keyOf = (p) => (p.artist + " — " + p.album).toLowerCase();
 const q = (p) => encodeURIComponent(p.artist + " " + p.album);
 
-function setAdvLabel() { $("advNow").textContent = "· " + ADV[$("adv").value][0]; }
+
 
 function linkEl(text, href) {
   const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = text; return a;
@@ -304,25 +302,27 @@ function render(picks, isExample, fresh) {
 
 function setStatus(msg, err) { const s = $("status"); s.textContent = msg; s.classList.toggle("err", !!err); }
 
-function buildPrompt(seedList, mood, adv) {
+function buildPrompt(seedList, mood) {
   const byType = (t) => Object.values(reactions).filter((x) => x.r === t).map((x) => x.artist + " – " + x.album);
   const loved = byType("loved"), nope = byType("nope"), known = byType("known");
   const previous = [...new Set(digHistory.flatMap((d) => d.picks.map((p) => p.artist + " – " + p.album)))].slice(0, 80);
   return [
     "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
-    "Recommend exactly 5 albums for a listener who loves these records:",
+    seedList.length ? "Recommend exactly 5 albums for a listener who loves these records:" : "Recommend exactly 5 albums for this mood or moment: " + mood,
     ...seedList.map((s) => "- " + s),
-    mood ? "Mood or occasion: " + mood : "",
-    "How adventurous to be: " + ADV[adv][1],
+    seedList.length && mood ? "The picks should also suit this mood or moment: " + mood : "",
+    "Balance: mostly records close to their taste, plus one or two that go somewhere a little unexpected, each still joined by a real, specific thread.",
     store.get("dc-portrait", null)?.portrait ? "Their taste so far, in summary: " + store.get("dc-portrait", null).portrait : "",
     loved.length ? "They loved these earlier picks (use them as extra taste signal): " + loved.join("; ") : "",
     nope.length ? "They did not like these earlier picks (steer away from what they share): " + nope.join("; ") : "",
     "Never recommend any of these, they already know them: " + [...seedList, ...known, ...previous].join("; "),
     "Rules:",
     "- Only real, released albums. Favour lesser-known records, deep cuts and underrated albums over famous classics.",
-    "- Each pick must connect to the seeds through one specific, real thread: a shared producer, engineer or session player, a sample, a label, a scene, or a direct influence.",
+    seedList.length
+      ? "- Each pick must connect to their records through one specific, real thread: a shared producer, engineer or session player, a sample, a label, a scene, or a direct influence."
+      : "- Each pick must suit the mood, and name one specific, real quality that makes it fit: its sound, tempo, instrumentation, era or scene.",
     "- Accuracy matters more than detail. Only state facts (years, labels, personnel, samples) you are highly confident are correct. If unsure of the year or label, use null. Never invent credits or samples.",
-    "- \"why\": 2 or 3 plain, specific sentences addressed to the listener. Start with \"Because you love <one of their records>,\" then name the specific thread that links them, then say what this record sounds like and what they will get from it.",
+    "- \"why\": 2 or 3 plain, specific sentences addressed to the listener. Start with \"Because you love <one of their records>,\" (or, when they gave only a mood, \"For <their mood>,\") then name the specific thread or quality, then say what this record sounds like and what they will get from it.",
     "- \"thread\": 2 to 3 words naming the connection type, e.g. \"Shared producer\", \"Sample source\", \"Same label\", \"Scene\", \"Influence\".",
     "- Spread the 5 picks across different artists and, where the seeds allow, different genres.",
     'Reply with only a JSON array of 5 objects: [{"artist": string, "album": string, "year": string|null, "label": string|null, "thread": string, "why": string}]'
@@ -341,21 +341,21 @@ const ERR = {
 $("digForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const seedList = seeds().map((s) => s.value.trim()).filter(Boolean).slice(0, MAX_SEEDS);
-  if (seedList.length < 1) { setStatus("Add at least one record you love, as Artist – Album.", true); seeds()[0].focus(); return; }
+  const mood = $("mood").value.trim();
+  if (!seedList.length && !mood) { setStatus("Add a record you love or describe a mood, then dig.", true); seeds()[0].focus(); return; }
   if (!sample) { setStatus("Live digging is coming soon. The sample dig below shows how it works.", true); return; }
-  const adv = $("adv").value, mood = $("mood").value.trim();
-  store.set("dc-form", { seeds: seeds().map((s) => s.value).filter((v) => v.trim()), mood, adv });
+  store.set("dc-form", { seeds: seeds().map((s) => s.value).filter((v) => v.trim()), mood });
   ctl = new AbortController();
   $("digBtn").disabled = true; $("stopBtn").hidden = false;
   setStatus("Digging through the crates… this can take up to a minute.");
   try {
-    const res = await sample.json(buildPrompt(seedList, mood, adv), { signal: ctl.signal, cache: false });
+    const res = await sample.json(buildPrompt(seedList, mood), { signal: ctl.signal, cache: false });
     const picks = (Array.isArray(res) ? res : []).filter((p) => p && p.artist && p.album).slice(0, 5)
       .map((p) => ({ artist: String(p.artist), album: String(p.album), year: p.year ? String(p.year) : "", label: p.label ? String(p.label) : "", thread: p.thread ? String(p.thread) : "", why: p.why ? String(p.why) : "" }));
     if (!picks.length) throw { code: "invalid_json" };
-    current = { picks, seeds: seedList };
+    current = { picks, seeds: seedList, mood };
     store.set("dc-last", current);
-    digHistory.unshift({ date: new Date().toISOString(), seeds: seedList, picks });
+    digHistory.unshift({ date: new Date().toISOString(), seeds: seedList, mood, picks });
     digHistory = digHistory.slice(0, 30);
     store.set("dc-history", digHistory);
     renderHistory();
@@ -371,12 +371,10 @@ $("digForm").addEventListener("submit", async (e) => {
   }
 });
 $("stopBtn").onclick = () => ctl?.abort();
-$("adv").addEventListener("input", setAdvLabel);
 
 // Initial state
 const saved = store.get("dc-form", null);
-if (saved) { (saved.seeds || []).filter(Boolean).slice(0, MAX_SEEDS).forEach((v, i) => { if (i === 0) seeds()[0].value = v; else addSeedField(v); }); $("mood").value = saved.mood || ""; $("adv").value = saved.adv || 3; }
-setAdvLabel();
+if (saved) { (saved.seeds || []).filter(Boolean).slice(0, MAX_SEEDS).forEach((v, i) => { if (i === 0) seeds()[0].value = v; else addSeedField(v); }); $("mood").value = saved.mood || ""; }
 if (current?.picks?.length) { render(current.picks, false, false); $("digBtn").textContent = "Dig again"; }
 else render(EXAMPLE.picks, true, false);
 renderHistory();
@@ -390,7 +388,7 @@ function renderHistory() {
     const det = document.createElement("details");
     const sum = document.createElement("summary");
     const from = document.createElement("span"); from.className = "from";
-    from.textContent = d.seeds?.length ? "From " + d.seeds.join(", ") : "Earlier dig";
+    from.textContent = [d.seeds?.length ? "From " + d.seeds.join(", ") : "", d.mood ? (d.seeds?.length ? "for " : "For ") + d.mood : ""].filter(Boolean).join(" ") || "Earlier dig";
     const when = document.createElement("span"); when.className = "when";
     when.textContent = d.date ? new Date(d.date).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "";
     sum.append(from, when);
