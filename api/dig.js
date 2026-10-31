@@ -3,12 +3,14 @@
 // The answer is re-sent in the same event format the page already reads, so the page needs no changes.
 
 const MAX_PROMPT_CHARS = 12000;
-const REQUESTS_PER_DAY = Number(process.env.REQUESTS_PER_DAY || 16); // 5 digs (some need a second request to replace invented albums) plus taste summaries
+// Optional per-visitor daily limit: set REQUESTS_PER_DAY in Vercel to turn it on. Off by default.
+const REQUESTS_PER_DAY = Number(process.env.REQUESTS_PER_DAY || 0);
 const hits = new Map(); // best-effort per-visitor limit; resets when the function restarts
 
 function dayKey() { return new Date().toISOString().slice(0, 10); }
 
 function overLimit(ip) {
+  if (!REQUESTS_PER_DAY) return false;
   const today = dayKey();
   const rec = hits.get(ip);
   const n = rec && rec.day === today ? rec.n : 0;
@@ -41,7 +43,7 @@ module.exports = async function handler(req, res) {
   if (!process.env.GROQ_API_KEY) return sendJSON(res, 500, { error: { message: "The server has no Groq key yet. Add GROQ_API_KEY in Vercel, then redeploy." } });
 
   const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "unknown";
-  if (overLimit(ip)) return sendJSON(res, 429, { error: { message: "You've used today's free digs. Come back tomorrow." } });
+  if (overLimit(ip)) return sendJSON(res, 429, { error: { message: "You've reached today's dig limit. Come back tomorrow." } });
 
   let prompt;
   try { ({ prompt } = await readBody(req)); } catch { return sendJSON(res, 400, { error: { message: "Send JSON: {\"prompt\": \"...\"}" } }); }

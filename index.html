@@ -307,7 +307,7 @@ const aiReady = () => !!(sample || API_URL || getKey());
 // Free public site: each visitor gets 5 digs a day (the server enforces its own limit too).
 const DIGS_PER_DAY = 5;
 const todayKey = () => new Date().toISOString().slice(0, 10);
-const limited = () => !!API_URL && !sample;
+const limited = () => false; // no daily limit for now
 function digsUsed() { const d = store.get("dc-digs", null); return d && d.day === todayKey() ? d.n : 0; }
 function countDig() { store.set("dc-digs", { day: todayKey(), n: digsUsed() + 1 }); }
 function digsLeftNote() { return limited() ? Math.max(0, DIGS_PER_DAY - digsUsed()) + " of " + DIGS_PER_DAY + " free digs left today." : ""; }
