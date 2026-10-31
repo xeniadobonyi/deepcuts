@@ -1047,7 +1047,7 @@ async function writeSummary(manual) {
   const fmt = (l) => l.map((p) => p.artist + " \u2013 " + p.album + (p.year ? " (" + p.year + (p.label ? ", " + p.label : "") + ")" : "")).join("; ") || "none";
   summarizing = true; profileNote = ""; renderProfile();
   try {
-    const res = await askClaude([
+    let res = await askClaude([
       "Analyse a listener's music taste from their reactions to album recommendations.",
       "Loved: " + fmt(by("loved")),
       "Not for them: " + fmt(by("nope")),
@@ -1059,8 +1059,15 @@ async function writeSummary(manual) {
       "Be specific and plain. No flattery and no invented facts: base every claim on the lists.",
       'Reply with only JSON: {"loves": string, "avoids": string, "genres": [string]}'
     ].join("\n"));
-    if (!res || !res.loves) throw { code: "invalid_json" };
-    const loves = String(res.loves), avoids = res.avoids ? String(res.avoids) : "";
+    // Free models vary their key names a little; accept the common variants.
+    const pickKey = (o, ...ks) => { if (!o || typeof o !== "object") return undefined; for (const k of Object.keys(o)) if (ks.includes(k.toLowerCase())) return o[k]; return undefined; };
+    const obj = Array.isArray(res) ? res[0] : res;
+    const lovesRaw = pickKey(obj, "loves", "love", "likes", "what_you_love");
+    if (!lovesRaw) throw { code: "invalid_json" };
+    const loves = String(lovesRaw), avoids = String(pickKey(obj, "avoids", "avoid", "dislikes", "not_for_you") || "");
+    let genresRaw = pickKey(obj, "genres", "genre", "tags", "styles");
+    if (typeof genresRaw === "string") genresRaw = genresRaw.split(/,\s*/);
+    res = { genres: Array.isArray(genresRaw) ? genresRaw.filter(Boolean) : [] };
     store.set("dc-portrait", {
       v: 2, loves, avoids, genres: (Array.isArray(res.genres) ? res.genres : Array.isArray(res.tags) ? res.tags : []).map(String).slice(0, 5),
       portrait: loves + (avoids ? " Not for them: " + avoids : ""),
@@ -1089,7 +1096,7 @@ function renderProfile() {
   const shownTotal = digHistory.reduce((n, d) => n + d.picks.length, 0);
   const repeats = shownTotal - shownKeys.size;
   const rs = Object.entries(reactions);
-  const by = (t) => rs.filter(([, v]) => v.r === t).map(([k, v]) => idx[k] || { artist: v.artist, album: v.album });
+  const by = (t) => rs.filter(([, v]) => v.r === t).map(([k, v]) => ({ ...v, ...(idx[k] || {}) }));
   const loved = by("loved"), nope = by("nope"), known = by("known");
 
   const stats = document.createElement("div"); stats.className = "stats";
