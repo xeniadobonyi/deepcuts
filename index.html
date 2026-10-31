@@ -417,6 +417,7 @@ async function checkReal(list, step, want = 5) {
         if (info.found === undefined) info.found = null;
       } catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; info = { found: null }; }
     }
+    if (info.found === null) checkReal.busy = (checkReal.busy || 0) + 1;
     if (info.found === true && !out.some((g) => g.artist.toLowerCase() === p.artist.toLowerCase())) {
       // Facts shown on the page come from MusicBrainz, not from the AI.
       out.push({ ...p, artist: info.artist || p.artist, album: info.title || p.album, year: info.year || "", label: "", rgId: info.mbid || "", verified: true, cover: info.cover || "" });
@@ -622,7 +623,8 @@ const ERR = {
   refused: "That request couldn't be answered. Try different records.",
   sampling_disabled: "Claude isn't available for this account, so only the sample dig is shown.",
   empty_completion: "The AI sent back an empty answer. Press Dig again.",
-  none_verified: "None of the suggested records could be confirmed as real albums. Try different records or keywords.",
+  none_verified: "None of the suggested records could be confirmed as real albums. Try adding another record you love, or a better-known one.",
+  mb_busy: "MusicBrainz, which we use to check every record is real, is busy right now. Try again in a minute.",
   no_ai: "Live digs aren't switched on for this address yet. The sample dig below shows how it works.",
   bad_key: "That API key wasn't accepted. Check it in the Claude Console, then save it again.",
   network: "Couldn't reach Claude. Check your connection and press Dig again.",
@@ -686,30 +688,38 @@ async function gatherCandidates(seedList, onStep) {
     const { artist, album } = splitSeed(raw);
     onStep("Looking up " + (album || artist) + "\u2026");
     // An entry can be "artist - album", "artist - song", or just an artist.
+    // Find the artist first, forgiving spelling and punctuation ("corto alto" finds "Corto.Alto").
     let rg = null, artistId = null, artistName = artist, song = "", albumPicked = false;
+    const norm = (x) => lc(x).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+    const pickArtist = (list) => {
+      const exact = (list || []).find((a) => norm(a.name) === norm(artist) || (a.aliases || []).some((al) => norm(al.name) === norm(artist)));
+      if (exact) return exact;
+      const top = (list || [])[0];
+      return top && (top.score || 0) >= 90 ? top : null;
+    };
+    let ar = await mb("artist", { query: `artist:"${noQuotes(artist)}"`, limit: 5 });
+    let a = pickArtist(ar?.artists);
+    if (!a) { ar = await mb("artist", { query: noQuotes(artist), limit: 5 }); a = pickArtist(ar?.artists); }
+    if (a) { artistId = a.id; artistName = a.name; }
     if (album) {
-      const sr = await mb("release-group", { query: `releasegroup:"${noQuotes(album)}" AND artist:"${noQuotes(artist)}"`, limit: 3 });
-      rg = (sr?.["release-groups"] || []).find((g) => (g.score || 0) >= 80) || null;
-      if (rg) { artistId = rg["artist-credit"]?.[0]?.artist?.id; artistName = rg["artist-credit"]?.[0]?.artist?.name || artist; }
-      else {
+      const by = artistId ? `arid:${artistId}` : `artist:"${noQuotes(artist)}"`;
+      const sr = await mb("release-group", { query: `releasegroup:"${noQuotes(album)}" AND ${by}`, limit: 3 });
+      rg = (sr?.["release-groups"] || []).find((g) => (g.score || 0) >= 70) || null;
+      if (rg && !artistId) { artistId = rg["artist-credit"]?.[0]?.artist?.id; artistName = rg["artist-credit"]?.[0]?.artist?.name || artist; }
+      if (!rg) {
         // Not an album: maybe a song. Use the album it first appeared on.
-        onStep("Looking for the song " + album + "\u2026");
-        const rs = await mb("recording", { query: `recording:"${noQuotes(album)}" AND artist:"${noQuotes(artist)}"`, limit: 5 });
-        const rec = (rs?.recordings || []).find((r) => (r.score || 0) >= 80);
+        onStep("Looking for the song " + album + "…");
+        const rs = await mb("recording", { query: `recording:"${noQuotes(album)}" AND ${by}`, limit: 5 });
+        const rec = (rs?.recordings || []).find((r) => (r.score || 0) >= 70);
         if (rec) {
           song = rec.title;
-          artistId = rec["artist-credit"]?.[0]?.artist?.id; artistName = rec["artist-credit"]?.[0]?.artist?.name || artist;
+          if (!artistId) { artistId = rec["artist-credit"]?.[0]?.artist?.id; artistName = rec["artist-credit"]?.[0]?.artist?.name || artist; }
           const home = (rec.releases || [])
             .filter((r) => r["release-group"]?.["primary-type"] === "Album" && !(r["release-group"]["secondary-types"] || []).length)
-            .sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")))[0];
+            .sort((x, y) => String(x.date || "9999").localeCompare(String(y.date || "9999")))[0];
           if (home) rg = { id: home["release-group"].id, title: home["release-group"].title, "first-release-date": home.date || "" };
         }
       }
-    }
-    if (!artistId) {
-      const ar = await mb("artist", { query: `artist:"${noQuotes(artist)}"`, limit: 1 });
-      const a = (ar?.artists || [])[0];
-      if (a && (a.score || 0) >= 85) { artistId = a.id; artistName = a.name; }
     }
     if (!artistId) continue;
     if (!rg) {
@@ -905,6 +915,7 @@ $("digForm").addEventListener("submit", async (e) => {
     }
     if (!picks.length) throw { code: "invalid_json" };
     if (verify) {
+      checkReal.busy = 0;
       setStatus("Checking each record is a real album\u2026");
       let good = await checkReal(picks, (i, n) => { bar.style.width = (62 + i * (36 / n)) + "%"; });
       if (good.length < 5) {
@@ -915,7 +926,7 @@ $("digForm").addEventListener("submit", async (e) => {
         const fresh = more.filter((p) => !good.some((g) => g.artist.toLowerCase() === p.artist.toLowerCase()));
         good = good.concat(await checkReal(fresh, () => {}, 5 - good.length));
       }
-      if (!good.length) throw { code: "none_verified" };
+      if (!good.length) throw { code: checkReal.busy >= 3 ? "mb_busy" : "none_verified" };
       dropped = Math.max(0, 5 - good.length);
       picks = good.slice(0, 5);
     } else picks = picks.slice(0, 5);
