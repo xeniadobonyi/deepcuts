@@ -684,6 +684,10 @@ function splitSeed(s) {
 
 async function gatherCandidates(seedList, onStep) {
   const seeds = [], cands = new Map();
+  // About one MusicBrainz lookup per second: cap the optional links so a dig stays around half a minute.
+  let calls = 0;
+  const budget = seedList.length > 1 ? 30 : 24;
+  const mbc = (e, p) => { calls++; return mb(e, p); };
   const few = seedList.length > 1; // with several records, follow fewer links per record to keep it quick
   const add = (c, fact) => {
     if (!c.artist || !c.album) return;
@@ -746,60 +750,108 @@ async function gatherCandidates(seedList, onStep) {
       : albumPicked ? seed.artist + "\u2019s " + seed.album
       : seed.artist + (seed.album ? " \u2013 " + seed.album : "");
 
-    // The artist: where they're from, their genres, and the artists they're linked to
-    const art = await mb("artist/" + artistId, { inc: "artist-rels+tags" });
-    seed.country = art?.area?.name || art?.country || "";
-    seed.tags = (art?.tags || []).slice().sort((a, b) => (b.count || 0) - (a.count || 0)).slice(0, 5).map((t) => t.name);
-    const seenRel = new Set();
-    const related = (art?.relations || []).filter((r) => r.artist && r.artist.id !== artistId && /member|collaboration|subgroup|is person|founder/i.test(r.type || "") && !seenRel.has(r.artist.id) && seenRel.add(r.artist.id)).slice(0, few ? 1 : 2);
+    // Every candidate below is an album taken straight from MusicBrainz, so it is real by definition.
+    // Links are followed in order of value; optional ones stop when the lookup budget runs out.
+    const spare = () => calls < budget;
+    const addAlbums = (groups, who, fact, max = 8) => {
+      for (const g of (groups || []).filter((x) => (!x["primary-type"] || x["primary-type"] === "Album") && !(x["secondary-types"] || []).length).slice(0, max)) {
+        add({ artist: who || creditName(g["artist-credit"]), album: g.title, year: yearOf(g["first-release-date"]), label: "", rgId: g.id }, fact);
+      }
+    };
 
-    // The record: its original label, and the producers and engineers who worked on it
+    // The artist: where they're from, their genres, band members and collaborators
+    const art = await mbc("artist/" + artistId, { inc: "artist-rels+tags" });
+    seed.country = art?.area?.name || art?.country || "";
+    seed.tags = (art?.tags || []).slice().sort((x, y) => (y.count || 0) - (x.count || 0)).slice(0, 5).map((t) => t.name);
+    const seenRel = new Set();
+    const relatedAll = (art?.relations || []).filter((r) => r.artist && r.artist.id !== artistId && /member|collaboration|subgroup|is person|founder/i.test(r.type || "") && !seenRel.has(r.artist.id) && seenRel.add(r.artist.id));
+    const insiders = new Set([artistId, ...relatedAll.map((r) => r.artist.id)]);
+    const related = relatedAll.slice(0, few ? 1 : 2);
+
+    // The record: its original label, plus everyone credited on it (producers, engineers, session players)
+    let people = [];
     if (rg) {
-      const rels = await mb("release", { "release-group": rg.id, inc: "labels", limit: 10 });
-      const list = (rels?.releases || []).slice().sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")));
+      const rels = await mbc("release", { "release-group": rg.id, inc: "labels", limit: 10 });
+      const list = (rels?.releases || []).slice().sort((x, y) => String(x.date || "9999").localeCompare(String(y.date || "9999")));
       const first = list[0];
       const li = (first?.["label-info"] || []).find((x) => x.label && !/no label/i.test(x.label.name || ""));
       if (li) seed.label = { id: li.label.id, name: li.label.name };
       if (first) {
-        const det = await mb("release/" + first.id, { inc: "artist-rels" });
-        const seenP = new Set();
-        const people = (det?.relations || []).filter((r) => r.artist && r.artist.id !== artistId && /producer|engineer|mix|arranger/i.test(r.type || "") && !seenP.has(r.artist.id) && seenP.add(r.artist.id)).slice(0, few ? 1 : 2);
-        for (const pr of people) {
-          onStep("Following " + pr.artist.name + "'s credits\u2026");
-          const pa = await mb("artist/" + pr.artist.id, { inc: "release-rels+artist-credits" });
-          for (const r of (pa?.relations || [])) {
-            if (!r.release || !/producer|engineer|mix|arranger/i.test(r.type || "")) continue;
-            const who = creditName(r.release["artist-credit"]);
-            if (!who) continue;
-            add({ artist: who, album: r.release.title, year: yearOf(r.release.date), label: "" },
-              `${pr.artist.name} worked on ${seedName} (${pr.type}) and on this record (${r.type})`);
-          }
+        onStep("Reading the credits on " + (seed.album || seed.artist) + "…");
+        const det = await mbc("release/" + first.id, { inc: "artist-rels+recordings+recording-level-rels" });
+        const credits = [...(det?.relations || [])];
+        for (const m of (det?.media || [])) for (const t of (m.tracks || [])) credits.push(...(t.recording?.relations || []));
+        const byPerson = new Map();
+        for (const r of credits) {
+          if (!r.artist || insiders.has(r.artist.id) || !/producer|engineer|mix|arranger|instrument|vocal|performer|programming/i.test(r.type || "")) continue;
+          const role = (r.attributes || [])[0] || r.type;
+          const e = byPerson.get(r.artist.id) || { id: r.artist.id, name: r.artist.name, role, n: 0, prod: false };
+          e.n++; if (/producer|engineer|mix|arranger/i.test(r.type)) { e.prod = true; e.role = r.type; }
+          byPerson.set(r.artist.id, e);
         }
+        // producers and engineers first, then the session players credited most often
+        people = [...byPerson.values()].sort((x, y) => (y.prod - x.prod) || (y.n - x.n)).slice(0, few ? 2 : 4);
       }
     }
 
-    // The label's catalogue from the same years
+    // The label's catalogue: same era first, then deeper into the back catalogue
     if (seed.label) {
-      onStep("Browsing the " + seed.label.name + " catalogue\u2026");
-      const lr = await mb("release", { label: seed.label.id, inc: "artist-credits+release-groups", limit: 100 });
-      for (const r of (lr?.releases || [])) {
-        const g = r["release-group"];
-        if (g && g["primary-type"] && g["primary-type"] !== "Album") continue;
-        if ((g?.["secondary-types"] || []).length) continue; // skip compilations, live albums, remixes
-        const y = yearOf(r.date || g?.["first-release-date"]);
-        if (seed.year && y && Math.abs(+y - +seed.year) > 6) continue;
-        add({ artist: creditName(r["artist-credit"]), album: g?.title || r.title, year: y, label: seed.label.name, rgId: g?.id || "" },
-          `Released on ${seed.label.name}, the same label as ${seedName}`);
+      onStep("Browsing the " + seed.label.name + " catalogue…");
+      const pages = [0].concat(spare() ? [100] : []);
+      for (const offset of pages) {
+        const lr = await mbc("release", { label: seed.label.id, inc: "artist-credits+release-groups", limit: 100, offset });
+        for (const r of (lr?.releases || [])) {
+          const g = r["release-group"];
+          if (!g?.id || (g["primary-type"] && g["primary-type"] !== "Album") || (g["secondary-types"] || []).length) continue;
+          const y = yearOf(r.date || g["first-release-date"]);
+          if (seed.year && y && Math.abs(+y - +seed.year) > 10) continue;
+          add({ artist: creditName(r["artist-credit"]), album: g.title, year: y, label: seed.label.name, rgId: g.id },
+            `Released on ${seed.label.name}, the same label as ${seedName}`);
+        }
+        if ((lr?.releases || []).length < 100) break;
       }
     }
 
-    // Albums by artists linked to this one: band members, collaborators, side projects
+    // The people on the record: their own albums
+    for (const pr of people) {
+      if (!spare()) break;
+      onStep("Following " + pr.name + "…");
+      const gr = await mbc("release-group", { artist: pr.id, type: "album", limit: 25 });
+      addAlbums(gr?.["release-groups"], pr.name, `${pr.name} is credited on ${seedName} (${pr.role}) and made this album`, 6);
+    }
+
+    // Band members, collaborators, and the other bands those members play in (side projects)
     for (const rr of related) {
-      onStep("Checking " + rr.artist.name + "\u2026");
-      const gr = await mb("release-group", { artist: rr.artist.id, type: "album", limit: 25 });
-      for (const g of (gr?.["release-groups"] || []).filter((x) => !(x["secondary-types"] || []).length).slice(0, 8)) {
-        add({ artist: rr.artist.name, album: g.title, year: yearOf(g["first-release-date"]), label: "", rgId: g.id },
-          `${rr.artist.name} is linked to ${seed.artist} (${rr.type})`);
+      if (!spare()) break;
+      onStep("Checking " + rr.artist.name + "…");
+      const gr = await mbc("release-group", { artist: rr.artist.id, type: "album", limit: 25 });
+      addAlbums(gr?.["release-groups"], rr.artist.name, `${rr.artist.name} is linked to ${seed.artist} (${rr.type})`);
+      if (!spare()) break;
+      const ma = await mbc("artist/" + rr.artist.id, { inc: "artist-rels" });
+      const sides = (ma?.relations || []).filter((r) => r.artist && !insiders.has(r.artist.id) && /member of band|collaboration|subgroup/i.test(r.type || "")).slice(0, 2);
+      for (const sd of sides) {
+        if (!spare()) break;
+        onStep("Following " + rr.artist.name + " into " + sd.artist.name + "…");
+        const sg = await mbc("release-group", { artist: sd.artist.id, type: "album", limit: 25 });
+        addAlbums(sg?.["release-groups"], sd.artist.name, `A side project: ${rr.artist.name} of ${seed.artist} also plays in ${sd.artist.name}`, 5);
+      }
+    }
+
+    // Sister labels (imprints and parent labels) from the same era
+    if (seed.label && spare()) {
+      const lab = await mbc("label/" + seed.label.id, { inc: "label-rels" });
+      const sister = (lab?.relations || []).find((r) => r.label && /imprint|ownership|subsidiary|label distribution|reissue/i.test(r.type || ""));
+      if (sister && spare()) {
+        onStep("Browsing the sister label " + sister.label.name + "…");
+        const sr = await mbc("release", { label: sister.label.id, inc: "artist-credits+release-groups", limit: 100 });
+        for (const r of (sr?.releases || [])) {
+          const g = r["release-group"];
+          if (!g?.id || (g["primary-type"] && g["primary-type"] !== "Album") || (g["secondary-types"] || []).length) continue;
+          const y = yearOf(r.date || g["first-release-date"]);
+          if (seed.year && y && Math.abs(+y - +seed.year) > 10) continue;
+          add({ artist: creditName(r["artist-credit"]), album: g.title, year: y, label: sister.label.name, rgId: g.id },
+            `Released on ${sister.label.name}, a sister label of ${seed.label.name} (${seedName})`);
+        }
       }
     }
   }
@@ -812,7 +864,7 @@ function rankCandidates(candidates, seeds, seedList) {
   const seen = new Set([...digHistory.flatMap((d) => d.picks.map(keyOf)), ...Object.keys(reactions)]);
   const perArtist = {};
   return candidates
-    .filter((c) => !seedArtists.has(lc(c.artist)) && !seen.has(keyOf(c)) && !/various artists/i.test(c.artist))
+    .filter((c) => c.rgId && c.artist && !seedArtists.has(lc(c.artist)) && !seen.has(keyOf(c)) && !/various artists/i.test(c.artist))
     .sort((a, b) => b.facts.length - a.facts.length)
     .filter((c) => { const k = lc(c.artist); perArtist[k] = (perArtist[k] || 0) + 1; return perArtist[k] <= 2; })
     .slice(0, 45);
