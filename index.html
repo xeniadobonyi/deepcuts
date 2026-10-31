@@ -270,8 +270,8 @@ const MODEL = "claude-sonnet-5-5";
 const getKey = () => (OWNER_TEST ? store.get("dc-api-key", "") : "");
 const aiReady = () => !!(sample || API_URL || getKey());
 
-// Free public site: each visitor gets 10 digs a day (the server enforces its own limit too).
-const DIGS_PER_DAY = 10;
+// Free public site: each visitor gets 5 digs a day (the server enforces its own limit too).
+const DIGS_PER_DAY = 5;
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const limited = () => !!API_URL && !sample;
 function digsUsed() { const d = store.get("dc-digs", null); return d && d.day === todayKey() ? d.n : 0; }

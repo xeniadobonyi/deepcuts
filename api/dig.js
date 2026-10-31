@@ -3,7 +3,7 @@
 // The answer is re-sent in the same event format the page already reads, so the page needs no changes.
 
 const MAX_PROMPT_CHARS = 12000;
-const REQUESTS_PER_DAY = Number(process.env.REQUESTS_PER_DAY || 15); // 10 digs plus a few taste summaries
+const REQUESTS_PER_DAY = Number(process.env.REQUESTS_PER_DAY || 8); // 5 digs plus a few taste summaries
 const hits = new Map(); // best-effort per-visitor limit; resets when the function restarts
 
 function dayKey() { return new Date().toISOString().slice(0, 10); }
