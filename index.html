@@ -155,6 +155,21 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .pick.is-unverified .sleeve { opacity: .45; }
 .crates { display: flex; flex-direction: column; gap: 28px; }
 .crate-box { display: flex; flex-direction: column; gap: 10px; }
+.share-row { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.share-panel { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 420px; border: 1px solid var(--rule); background: var(--surface); padding: 12px; box-sizing: border-box; }
+.share-panel label { font-size: 13px; color: var(--muted); }
+.share-note { font-size: 13px; color: var(--muted); min-height: 1.2em; }
+.shared { display: flex; flex-direction: column; gap: 14px; }
+.shared-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.shared-close { min-height: 36px; padding: 4px 12px; font-size: 14px; }
+.cover-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; max-width: 360px; }
+.cover-grid:empty { display: none; }
+.cover-grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border: 1px solid var(--rule); display: block; }
+.how { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 62ch; }
+.faq { border-top: 1px solid var(--rule); padding-block: 10px; max-width: 62ch; }
+.faq summary { cursor: pointer; font-weight: 500; }
+.faq p { margin: 8px 0 0; color: var(--muted); }
+#howSec { display: flex; flex-direction: column; gap: 12px; }
 .ascii-crate { display: flex; flex-direction: column; font-family: var(--mono); font-size: clamp(10px, 3.1vw, 14px); line-height: 1.55; overflow-x: auto; max-width: 100%; }
 .ascii-line { display: block; white-space: pre; color: var(--fg); }
 .ascii-empty { color: var(--muted); }
@@ -206,6 +221,21 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <h1 class="brand">Deep Cuts</h1>
     <p class="tagline">Tell it three records you love. It digs out five you probably haven't heard, and tells you why.</p>
   </header>
+
+  <section id="sharedSec" class="shared" hidden aria-labelledby="sharedName">
+    <div class="shared-head">
+      <p class="label" style="margin:0">A crate someone shared with you</p>
+      <button type="button" class="btn ghost shared-close" id="sharedClose" aria-label="Close the shared crate">Close</button>
+    </div>
+    <h2 class="sec-title" id="sharedName"></h2>
+    <div class="cover-grid" id="sharedCovers" aria-hidden="true"></div>
+    <div class="ascii-crate" id="sharedCrate"></div>
+    <div class="crate-detail" id="sharedDetail" hidden></div>
+    <div class="actions">
+      <button type="button" class="btn" id="sharedDig">Dig from this crate</button>
+      <button type="button" class="btn ghost" id="sharedOwn">Make your own crate</button>
+    </div>
+  </section>
 
   <form id="digForm" novalidate>
     <div>
@@ -268,7 +298,21 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="past" id="past"></div>
   </section>
 
-  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice. Picks and details are AI-generated from music knowledge, so check credits on Discogs before quoting them. Album data from MusicBrainz. Covers from the Cover Art Archive. <a href="https://www.discogs.com" target="_blank" rel="noopener">Data provided by Discogs.</a> This site uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. “Discogs” is a trademark of Zink Media, LLC.</p>
+  <section id="howSec">
+    <h2 class="sec-title">How it works</h2>
+    <ol class="how">
+      <li><b>Start from records you love, or a vibe.</b> An album, a song or an artist, or words like a place, a decade and a mood.</li>
+      <li><b>It follows real links.</b> The musicians and producers on your record, its label, band members and the records it samples, from MusicBrainz and Discogs. A vibe becomes Discogs searches by style, country and years.</li>
+      <li><b>An AI chooses and explains.</b> It picks the best five from those real records and writes why. It can't make records up: every pick is a real release.</li>
+      <li><b>Rarity comes from collectors.</b> Discogs shows how many people own and want each record, so every dig mixes an Essential, Digger favourites and Deep cuts. Dig deeper goes rarer.</li>
+    </ol>
+    <details class="faq"><summary>Why can a dig take half a minute?</summary><p>MusicBrainz, the open music database Deep Cuts reads, allows about one lookup a second. Records someone dug from recently come back much faster.</p></details>
+    <details class="faq"><summary>Is my data stored?</summary><p>No accounts and no tracking. Your digs, crates and taste profile stay in this browser. What you search is sent to the AI to make the dig; Deep Cuts doesn&rsquo;t save it.</p></details>
+    <details class="faq"><summary>Which AI is it?</summary><p>An open model (gpt-oss) on Groq&rsquo;s free tier. It only chooses among real records the site found, and writes the reasons.</p></details>
+    <details class="faq"><summary>Is it free?</summary><p>Yes: free, with no ads and no sign-up.</p></details>
+  </section>
+
+  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice. The reasons are written by AI, so check credits on Discogs before quoting them. Open source on <a href="https://github.com/xeniadobonyi/deepcuts" target="_blank" rel="noopener">GitHub</a>. Album data from MusicBrainz. Covers from the Cover Art Archive. <a href="https://www.discogs.com" target="_blank" rel="noopener">Data provided by Discogs.</a> This site uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. “Discogs” is a trademark of Zink Media, LLC.</p>
 </div>
 
 <script>
@@ -1722,6 +1766,141 @@ $("digDeeper").onclick = () => {
   if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event("submit", { cancelable: true }));
 };
 
+// ---------- Sharing a crate as a link ----------
+// The whole crate travels in the link (#crate=…): no account, no server. Up to 10 records and a name.
+const b64u = {
+  enc: (str) => { let bin = ""; new TextEncoder().encode(str).forEach((b) => { bin += String.fromCharCode(b); }); return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); },
+  dec: (t) => new TextDecoder().decode(Uint8Array.from(atob(t.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0)))
+};
+let crateNames = store.get("dc-crate-names", {});
+const crateName = (n) => String(crateNames[n] || "").trim() || "Crate " + (n + 1);
+function crateLink(name, recs) {
+  const data = { v: 1, n: String(name).slice(0, 60), r: recs.slice(0, CRATE_SIZE).map((p) => [p.artist, p.album, p.year || "", p.rgId || ""]) };
+  return location.origin + location.pathname + "#crate=" + b64u.enc(JSON.stringify(data));
+}
+// Links come from anyone: read them strictly, as plain text, with limits.
+function readSharedCrate(hash) {
+  const m = String(hash || "").match(/^#crate=([A-Za-z0-9_-]{8,8000})$/);
+  if (!m) return null;
+  try {
+    const d = JSON.parse(b64u.dec(m[1]));
+    const clip = (x, n) => String(x ?? "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, n);
+    const recs = (Array.isArray(d?.r) ? d.r : []).slice(0, CRATE_SIZE).filter(Array.isArray)
+      .map((r) => ({ artist: clip(r[0], 120), album: clip(r[1], 160), year: clip(r[2], 4).replace(/\D/g, ""), rgId: /^[0-9a-f-]{36}$/.test(String(r[3] || "")) ? r[3] : "" }))
+      .filter((r) => r.artist && r.album);
+    return recs.length ? { name: clip(d.n, 60) || "A crate", recs } : null;
+  } catch { return null; }
+}
+function renderSharedCrate() {
+  const sc = readSharedCrate(location.hash);
+  $("sharedSec").hidden = !sc;
+  if (!sc) return;
+  $("sharedName").textContent = sc.name + " \u00b7 " + sc.recs.length + " record" + (sc.recs.length === 1 ? "" : "s");
+  const covers = $("sharedCovers"); covers.replaceChildren();
+  sc.recs.filter((r) => r.rgId).slice(0, 4).forEach((r) => {
+    const img = new Image(); img.alt = ""; img.decoding = "async"; img.loading = "lazy";
+    img.onerror = () => img.remove();
+    img.src = "https://coverartarchive.org/release-group/" + r.rgId + "/front-250";
+    covers.append(img);
+  });
+  const W = 40, IN = W - 4;
+  const ascii = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "?");
+  const fit = (t) => (t.length > IN ? t.slice(0, IN - 2) + ".." : t.padEnd(IN, " "));
+  const box = $("sharedCrate"); box.replaceChildren();
+  const label = " " + ascii(sc.name).toUpperCase().slice(0, 22) + " ";
+  const top = document.createElement("span"); top.className = "ascii-line";
+  top.textContent = "+--" + label + "-".repeat(Math.max(1, W - 4 - label.length)) + "+";
+  box.append(top);
+  const detail = $("sharedDetail");
+  sc.recs.forEach((p, i) => {
+    const row = document.createElement("button"); row.type = "button"; row.className = "ascii-line ascii-rec";
+    row.textContent = "| " + fit(String(i + 1).padStart(2, "0") + " " + ascii(p.artist).toUpperCase() + " - " + ascii(p.album)) + " |";
+    row.setAttribute("aria-label", "Record " + (i + 1) + ": " + p.artist + " — " + p.album);
+    row.onclick = () => {
+      const open = row.getAttribute("aria-expanded") === "true";
+      box.querySelectorAll(".ascii-rec").forEach((r) => r.setAttribute("aria-expanded", "false"));
+      detail.replaceChildren(); detail.hidden = open;
+      if (open) return;
+      row.setAttribute("aria-expanded", "true");
+      const name = document.createElement("p"); name.className = "loved-name";
+      const b = document.createElement("b"); b.textContent = p.artist;
+      name.append(b, document.createTextNode(" \u2014 "), Object.assign(document.createElement("i"), { textContent: p.album }));
+      const links = document.createElement("div"); links.className = "links";
+      links.append(
+        linkEl("YouTube", "https://www.youtube.com/results?search_query=" + q(p) + "+full+album"),
+        linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
+        linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
+        linkEl("Discogs", "https://www.discogs.com/search/?type=all&q=" + q(p))
+      );
+      const k = keyOf(p);
+      const love = document.createElement("button"); love.type = "button"; love.className = "chip";
+      const setLove = () => { love.textContent = reactions[k]?.r === "loved" ? "\u2665 In your crate" : "\u2661 Add to my crate"; };
+      setLove();
+      love.onclick = () => {
+        if (reactions[k]?.r === "loved") delete reactions[k];
+        else reactions[k] = { r: "loved", artist: p.artist, album: p.album, year: p.year || "", rgId: p.rgId || "", at: Date.now() };
+        store.set("dc-reactions", reactions); setLove(); renderCrate(); renderProfile();
+        if (reactions[k]) queueCredits(k);
+      };
+      const more = document.createElement("button"); more.type = "button"; more.className = "chip"; more.textContent = "More like this";
+      more.onclick = () => digFromRecords([p]);
+      const row2 = document.createElement("div"); row2.className = "react"; row2.append(love, more);
+      if (p.year) { const meta = document.createElement("span"); meta.className = "meta"; meta.textContent = p.year; detail.append(name, meta, links, row2); }
+      else detail.append(name, links, row2);
+    };
+    box.append(row);
+  });
+  const bottom = document.createElement("span"); bottom.className = "ascii-line"; bottom.textContent = "+" + "-".repeat(W - 2) + "+";
+  box.append(bottom);
+  // Dig from three records spread across the crate: first, middle and last.
+  $("sharedDig").onclick = () => {
+    const r = sc.recs, pick = r.length <= 3 ? r : [r[0], r[Math.floor(r.length / 2)], r[r.length - 1]];
+    digFromRecords(pick);
+  };
+}
+$("sharedClose").onclick = () => {
+  try { history.replaceState(null, "", location.pathname + location.search); } catch { location.hash = ""; }
+  renderSharedCrate();
+};
+$("sharedOwn").onclick = () => {
+  $("digForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  setStatus("Dig, then tap Loved it on the records you love: they fill your own crate.");
+  seeds()[0].focus({ preventScroll: true });
+};
+window.addEventListener("hashchange", renderSharedCrate);
+
+// The share panel under each crate: a name, then copy or share the link.
+function sharePanel(n, recs, onRename) {
+  const wrap = document.createElement("div"); wrap.className = "share-row";
+  const btn = document.createElement("button"); btn.type = "button"; btn.className = "btn ghost"; btn.textContent = "Share this crate";
+  btn.setAttribute("aria-expanded", "false");
+  const panel = document.createElement("div"); panel.className = "share-panel"; panel.hidden = true;
+  const id = "crateName" + n;
+  const lab = document.createElement("label"); lab.htmlFor = id; lab.textContent = "Name your crate";
+  const input = document.createElement("input"); input.type = "text"; input.id = id; input.maxLength = 60; input.autocomplete = "off";
+  input.value = crateNames[n] || ""; input.placeholder = "e.g. Sunday morning soul";
+  input.onchange = () => { crateNames[n] = input.value.trim(); store.set("dc-crate-names", crateNames); onRename?.(); };
+  const note = document.createElement("span"); note.className = "share-note"; note.setAttribute("aria-live", "polite");
+  const row = document.createElement("div"); row.className = "actions"; row.style.gap = "8px";
+  const copy = document.createElement("button"); copy.type = "button"; copy.className = "btn"; copy.textContent = "Copy link";
+  const link = () => { crateNames[n] = input.value.trim(); store.set("dc-crate-names", crateNames); onRename?.(); return crateLink(crateName(n), recs); };
+  copy.onclick = async () => {
+    const url = link();
+    try { await navigator.clipboard.writeText(url); note.textContent = "Link copied. Anyone can open it, no account needed."; }
+    catch { input.select?.(); note.textContent = "Copy this link: " + url; }
+  };
+  row.append(copy);
+  if (navigator.share) {
+    const sh = document.createElement("button"); sh.type = "button"; sh.className = "btn ghost"; sh.textContent = "Share\u2026";
+    sh.onclick = async () => { try { await navigator.share({ title: crateName(n) + " \u00b7 Deep Cuts", text: "A crate of " + recs.length + " records I dug up", url: link() }); } catch {} };
+    row.append(sh);
+  }
+  panel.append(lab, input, row, note);
+  btn.onclick = () => { panel.hidden = !panel.hidden; btn.setAttribute("aria-expanded", String(!panel.hidden)); if (!panel.hidden) input.focus(); };
+  wrap.append(btn, panel);
+  return wrap;
+}
+
 // Initial state
 const saved = store.get("dc-form", null);
 // After a reload the form starts empty, ready for a new dig, always on "Records I love".
@@ -1740,6 +1919,7 @@ else render(EXAMPLE.picks, true, false);
 renderHistory();
 renderProfile();
 renderCrate();
+renderSharedCrate();
 Object.keys(reactions).filter((k) => reactions[k].r === "loved" && !reactions[k].credits).slice(0, 8).forEach(queueCredits);
 
 // Loved records fill crates of 10, oldest first. A new crate starts when one is full.
@@ -1764,7 +1944,9 @@ function renderCrate() {
   const line = (t) => "| " + fit(t) + " |";
   crates.map((recs, n) => ({ recs, n })).reverse().forEach(({ recs, n }) => {
     const crate = document.createElement("div"); crate.className = "ascii-crate";
-    const label = " CRATE " + (n + 1) + " ", count = recs.length === CRATE_SIZE ? " FULL " : " " + recs.length + "/10 ";
+    const topLine = () => { const label = " " + ascii(crateName(n)).toUpperCase().slice(0, 20) + " ", count = recs.length === CRATE_SIZE ? " FULL " : " " + recs.length + "/10 ";
+      return "+--" + label + "-".repeat(Math.max(1, W - 6 - label.length - count.length)) + count + "--+"; };
+    const label = " " + ascii(crateName(n)).toUpperCase().slice(0, 20) + " ", count = recs.length === CRATE_SIZE ? " FULL " : " " + recs.length + "/10 ";
     const top = document.createElement("span"); top.className = "ascii-line";
     top.textContent = "+--" + label + "-".repeat(Math.max(1, W - 6 - label.length - count.length)) + count + "--+";
     crate.append(top);
@@ -1789,7 +1971,7 @@ function renderCrate() {
     bottom.textContent = "+" + "-".repeat(W - 2) + "+";
     crate.append(bottom);
     const wrap = document.createElement("div"); wrap.className = "crate-box";
-    wrap.append(crate, panel);
+    wrap.append(crate, panel, sharePanel(n, recs, () => { top.textContent = topLine(); }));
     box.append(wrap);
   });
 }
