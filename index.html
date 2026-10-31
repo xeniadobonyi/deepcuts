@@ -1053,15 +1053,16 @@ async function writeSummary(manual) {
       "Not for them: " + fmt(by("nope")),
       "Already knew (shows familiarity, not necessarily love): " + fmt(by("known")),
       "Write two short parts in the second person:",
-      "- loves: 2 or 3 sentences on what they are drawn to: sounds, eras, scenes, production styles, moods. Point out patterns across the loved records.",
-      "- avoids: 1 or 2 sentences on what seems not to work for them, in contrast with what they love. If nothing is marked Not for them, return an empty string.",
-      "Be specific and plain. No flattery and no invented facts: base every claim on the lists. Also give 3 to 5 short taste tags of 1 to 3 words.",
-      'Reply with only JSON: {"loves": string, "avoids": string, "tags": [string]}'
+      "- loves: ONE short sentence, at most 15 words, naming the pattern in what they love.",
+      "- avoids: ONE short sentence, at most 12 words, on what doesn't work for them. If nothing is marked Not for them, return an empty string.",
+      "- genres: the 3 to 5 genres that best describe the loved records, 1 to 3 words each, most important first.",
+      "Be specific and plain. No flattery and no invented facts: base every claim on the lists.",
+      'Reply with only JSON: {"loves": string, "avoids": string, "genres": [string]}'
     ].join("\n"));
     if (!res || !res.loves) throw { code: "invalid_json" };
     const loves = String(res.loves), avoids = res.avoids ? String(res.avoids) : "";
     store.set("dc-portrait", {
-      loves, avoids, tags: Array.isArray(res.tags) ? res.tags.map(String) : [],
+      v: 2, loves, avoids, genres: (Array.isArray(res.genres) ? res.genres : Array.isArray(res.tags) ? res.tags : []).map(String).slice(0, 5),
       portrait: loves + (avoids ? " Not for them: " + avoids : ""),
       basis: rs.length
     });
@@ -1076,7 +1077,7 @@ async function writeSummary(manual) {
 function maybeAutoSummary() {
   const n = Object.keys(reactions).length, saved = store.get("dc-portrait", null);
   if (n < 3 || summarizing || !aiReady()) return;
-  if (saved && Math.abs(n - (saved.basis || 0)) < 3) return;
+  if (saved && saved.v === 2 && Math.abs(n - (saved.basis || 0)) < 3) return;
   clearTimeout(summaryTimer);
   summaryTimer = setTimeout(() => writeSummary(false), 4000);
 }
@@ -1114,19 +1115,13 @@ function renderProfile() {
     add("What you love", saved.loves || saved.portrait);
     add("What's not for you", saved.avoids);
     box.append(an);
-    if (Array.isArray(saved.tags) && saved.tags.length) {
-      const tg = document.createElement("div"); tg.className = "tags";
-      saved.tags.slice(0, 6).forEach((t) => { const s = document.createElement("span"); s.className = "tag"; s.textContent = String(t); tg.append(s); });
-      box.append(tg);
-    }
   }
 
   const decade = (p) => { const y = parseInt(p.year, 10); return y > 1900 ? Math.floor(y / 10) * 10 + "s" : ""; };
   const rows = [
+    ["Genres you love", (saved?.v === 2 && Array.isArray(saved.genres) ? saved.genres : []).join(", ")],
     ["Eras you love", tally(loved, decade)],
     ["Labels you love", tally(loved, (p) => p.label)],
-    ["Connections that land", tally(loved, (p) => p.thread)],
-    ["Loved", loved.slice(0, 6).map((p) => p.artist).join(", ")],
     ["Not for you", nope.slice(0, 6).map((p) => p.artist).join(", ")]
   ].filter(([, v]) => v);
   if (rows.length) {
@@ -1149,6 +1144,7 @@ function renderProfile() {
 (async () => {
   try { sample = await window.claude?.use?.("sample"); } catch { sample = null; }
   if (!sample) { renderKeyBox(); if (limited()) setStatus(digsLeftNote()); }
+  maybeAutoSummary();
 })();
 </script>
 
