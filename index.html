@@ -312,7 +312,7 @@ function normalizePicks(res) {
     label: s(get(o, "label", "record_label")).replace(/^null$/i, ""),
     thread: s(get(o, "thread", "connection", "tag", "match")),
     why: s(get(o, "why", "reason", "explanation", "description"))
-  })).filter((p) => p.artist && p.album).slice(0, 5);
+  })).filter((p) => p.artist && p.album).slice(0, 10);
 }
 
 function parseJSONLoose(t) {
@@ -369,8 +369,32 @@ async function askClaude(prompt, { signal, onText } = {}) {
 // They load one at a time to respect MusicBrainz's limit; the coloured sleeve stays if none is found.
 const coverQueue = [];
 let coverBusy = false;
+// Look each pick up on MusicBrainz, one at a time, and keep only albums that exist (unknown counts as kept).
+async function checkReal(list, step, want = 5) {
+  const out = [];
+  for (let i = 0; i < list.length && out.length < want; i++) {
+    if (ctl?.signal.aborted) throw { code: "cancelled" };
+    step(i, list.length);
+    const p = list[i];
+    let info = { found: null };
+    try {
+      const r = await fetch("/api/cover?check=1&artist=" + encodeURIComponent(p.artist) + "&album=" + encodeURIComponent(p.album), { signal: ctl?.signal });
+      info = await r.json();
+    } catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; }
+    if (info.found !== false && !out.some((g) => g.artist.toLowerCase() === p.artist.toLowerCase())) out.push({ ...p, verified: info.found === true, cover: info.cover || "" });
+    if (i < list.length - 1 && out.length < want) await new Promise((r) => setTimeout(r, 1100));
+  }
+  return out;
+}
+
 function queueCover(sleeve, p) {
-  if (!API_URL) return;
+  if (p.cover) {
+    const img = new Image(); img.alt = ""; img.decoding = "async";
+    img.onload = () => { sleeve.prepend(img); sleeve.classList.add("has-cover"); };
+    img.src = p.cover;
+    return;
+  }
+  if (!API_URL || p.verified === true) return;
   coverQueue.push([sleeve, p]);
   pumpCovers();
 }
@@ -502,7 +526,7 @@ function render(picks, isExample, fresh) {
 
 function setStatus(msg, err) { const s = $("status"); s.textContent = msg; s.classList.toggle("err", !!err); }
 
-function buildPrompt(seedList, mood) {
+function buildPrompt(seedList, mood, count = 5, avoid = []) {
   const byType = (t) => Object.values(reactions).filter((x) => x.r === t).map((x) => x.artist + " – " + x.album);
   const loved = byType("loved"), nope = byType("nope"), known = byType("known");
   const previous = [...new Set(digHistory.flatMap((d) => d.picks.map((p) => p.artist + " – " + p.album)))].slice(0, 80);
@@ -510,17 +534,18 @@ function buildPrompt(seedList, mood) {
   return [
     "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
     hasWords ? "The listener searched for: \"" + mood + "\"" : "",
-    hasWords ? "This search is the brief. Every one of the 5 albums must clearly match ALL of its words, taken literally: any place, era, genre, mood, instrument or scene it names. If it names a place and a decade, every album must come from that place and that decade. Do not drift towards other styles." : "",
+    hasWords ? "This search is the brief. Every one of the " + count + " albums must clearly match ALL of its words, taken literally: any place, era, genre, mood, instrument or scene it names. If it names a place and a decade, every album must come from that place and that decade. Do not drift towards other styles." : "",
     hasSeeds && hasWords ? "Within that brief, lean towards records a fan of these albums would also enjoy:" : "",
-    hasSeeds && !hasWords ? "Recommend exactly 5 albums for a listener who loves these records:" : "",
+    hasSeeds && !hasWords ? "Recommend exactly " + count + " albums for a listener who loves these records:" : "",
     ...seedList.map((s) => "- " + s),
-    !hasSeeds ? "Recommend exactly 5 albums for that search." : "",
+    !hasSeeds ? "Recommend exactly " + count + " albums for that search." : "",
     // Each dig answers only what was entered now. Past reactions are used only to avoid repeats, never to steer.
     hasSeeds && seedList.length > 1 ? "First work out what these records have in common: country or city, language, scene, era, genre, label or sound. That shared ground is the core of the brief, so most picks should share it too. For example, two French records mean mostly French picks." : "",
     hasSeeds ? "Every pick must connect directly to one of the records listed above, not to anything else. Spread the picks across those records." : "",
-    "Never recommend any of these exact albums, they already know them: " + [...seedList, ...known, ...nope, ...previous].join("; "),
+    "Never recommend any of these exact albums, they already know them: " + [...seedList, ...known, ...nope, ...previous, ...avoid].join("; "),
     "Rules:",
     "- Only real, released albums. Favour lesser-known records, deep cuts and underrated albums over famous classics.",
+    "- Every album must be a real release you could find on Discogs or MusicBrainz under exactly this artist name and album title. If you are not certain an album exists, leave it out. Never combine a real artist with a made-up title.",
     hasWords
       ? "- For each pick, name the specific, real quality that makes it match the search: where and when it was made, its scene, its sound or instrumentation."
       : "- Each pick must connect to their records through one specific, real thread: a shared producer, engineer or session player, a sample, a label, a scene, or a direct influence.",
@@ -531,11 +556,11 @@ function buildPrompt(seedList, mood) {
     hasWords
       ? "- \"thread\": 2 to 4 words naming how it matches the search, e.g. \"Laurel Canyon, 1972\", \"West Coast soft rock\"."
       : "- \"thread\": 2 to 3 words naming the connection type, e.g. \"Shared producer\", \"Sample source\", \"Same label\", \"Scene\", \"Influence\".",
-    "- The 5 picks must be by 5 different artists.",
+    "- The " + count + " picks must be by " + count + " different artists.",
     hasSeeds && (seedList.length > 1 || hasWords)
       ? "- Order the picks from strongest match to weakest. The first pick is the one album that best connects to ALL of the records" + (hasWords ? " and the search" : "") + " at once: it sits right in their common ground. Its \"why\" names every one of the records and explains what links them all, and its \"thread\" is \"Common ground\"."
       : "- Order the picks from strongest match to weakest. The first pick is the album that matches the request most completely.",
-    'Reply with only a JSON array of 5 objects: [{"artist": string, "album": string, "year": string|null, "label": string|null, "thread": string, "why": string}]'
+    'Reply with only a JSON array of ' + count + ' objects: [{"artist": string, "album": string, "year": string|null, "label": string|null, "thread": string, "why": string}]'
   ].filter(Boolean).join("\n");
 }
 
@@ -547,6 +572,7 @@ const ERR = {
   refused: "That request couldn't be answered. Try different records.",
   sampling_disabled: "Claude isn't available for this account, so only the sample dig is shown.",
   empty_completion: "The AI sent back an empty answer. Press Dig again.",
+  none_verified: "None of the suggested records could be confirmed as real albums. Try different records or keywords.",
   no_ai: "Live digs aren't switched on for this address yet. The sample dig below shows how it works.",
   bad_key: "That API key wasn't accepted. Check it in the Claude Console, then save it again.",
   network: "Couldn't reach Claude. Check your connection and press Dig again.",
@@ -565,20 +591,23 @@ $("digForm").addEventListener("submit", async (e) => {
   $("digBtn").disabled = true; $("stopBtn").hidden = false;
   setStatus("Digging through the crates… this can take up to a minute.");
   const prog = $("progress"), bar = $("progressBar");
-  let found = 0;
+  let found = 0, target = 5, dropped = 0;
   prog.hidden = false; prog.classList.add("waiting"); bar.style.width = ""; prog.removeAttribute("aria-valuenow");
   const onText = ({ text }) => {
-    const n = Math.min(5, (text.match(/"why"\s*:\s*"(?:[^"\\]|\\.)*"/g) || []).length);
+    const n = Math.min(target, (text.match(/"why"\s*:\s*"(?:[^"\\]|\\.)*"/g) || []).length);
     if (prog.classList.contains("waiting")) { prog.classList.remove("waiting"); bar.style.width = "8%"; setStatus("Found the first lead…"); }
     if (n > found) {
       found = n;
-      bar.style.width = (8 + n * 18.4) + "%";
+      bar.style.width = (8 + n * (52 / target)) + "%";
       prog.setAttribute("aria-valuenow", String(n));
-      setStatus(n + " of 5 records dug…");
+      setStatus(n + " of " + target + " records dug…");
     }
   };
   try {
-    const prompt = buildPrompt(seedList, mood);
+    // On the public site every pick is checked against MusicBrainz, so ask for spares.
+    const verify = !!API_URL && !sample;
+    target = verify ? 8 : 5;
+    const prompt = buildPrompt(seedList, mood, target);
     let picks = [];
     try { picks = normalizePicks(await askClaude(prompt, { signal: ctl.signal, onText })); }
     catch (e) { if (e?.code !== "invalid_json") throw e; }
@@ -587,8 +616,23 @@ $("digForm").addEventListener("submit", async (e) => {
       setStatus("Tidying up the answer…");
       picks = normalizePicks(await askClaude(prompt + "\nIMPORTANT: reply with the JSON array only. No headings, no explanation, no markdown.", { signal: ctl.signal, onText }));
     }
-    bar.style.width = "100%";
     if (!picks.length) throw { code: "invalid_json" };
+    if (verify) {
+      setStatus("Checking each record is a real album\u2026");
+      let good = await checkReal(picks, (i, n) => { bar.style.width = (62 + i * (36 / n)) + "%"; });
+      if (good.length < 5) {
+        setStatus("Swapping out records that couldn't be confirmed\u2026");
+        let more = [];
+        try { more = normalizePicks(await askClaude(buildPrompt(seedList, mood, 5, picks.map((p) => p.artist + " \u2013 " + p.album)), { signal: ctl.signal })); }
+        catch (e2) { if (e2?.code !== "invalid_json") throw e2; }
+        const fresh = more.filter((p) => !good.some((g) => g.artist.toLowerCase() === p.artist.toLowerCase()));
+        good = good.concat(await checkReal(fresh, () => {}, 5 - good.length));
+      }
+      if (!good.length) throw { code: "none_verified" };
+      dropped = Math.max(0, 5 - good.length);
+      picks = good.slice(0, 5);
+    } else picks = picks.slice(0, 5);
+    bar.style.width = "100%";
     if (limited()) countDig();
     current = { picks, seeds: seedList, mood };
     store.set("dc-last", current);
@@ -598,7 +642,7 @@ $("digForm").addEventListener("submit", async (e) => {
     renderHistory();
     renderProfile();
     render(picks, false, true);
-    setStatus("Five records dug. Mark what you think, then dig again for a sharper set. " + digsLeftNote());
+    setStatus((dropped ? "Only " + picks.length + " records could be confirmed as real albums, so that\u2019s all this dig shows. " : (verify ? "Five real records dug, each checked on MusicBrainz. " : "Five records dug. ")) + digsLeftNote());
     $("digBtn").textContent = "Dig again";
   } catch (err) {
     if (err?.code === "cancelled") setStatus("Stopped.");

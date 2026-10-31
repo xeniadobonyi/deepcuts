@@ -5,6 +5,7 @@ Deep Cuts learns your taste and digs for you: five records you probably haven't 
 ## What's here
 
 - `index.html`: the whole site, one static page
+- `api/cover.js`: checks each recommended album exists on MusicBrainz and finds its cover in the Cover Art Archive
 - `api/dig.js`: a small Vercel Function that sends each dig to Groq's free AI API and streams the answer back. The key stays on the server; visitors never see it or need an account.
 
 Everything runs on free tiers: Vercel Hobby for hosting and Groq's free API for the AI. Each visitor gets 5 digs a day. Groq's free allowance is shared by all visitors, so on a very busy day digs may pause until the next day.
@@ -26,7 +27,7 @@ Everything runs on free tiers: Vercel Hobby for hosting and Groq's free API for 
 Optional environment variables:
 
 - `MODEL`: the Groq model to use (default `openai/gpt-oss-120b`)
-- `REQUESTS_PER_DAY`: server-side requests per visitor per day (default 8: 5 digs plus taste summaries)
+- `REQUESTS_PER_DAY`: server-side requests per visitor per day (default 16: 5 digs, the occasional replacement request, and taste summaries)
 
 The GitHub Pages copy (xeniadobonyi.github.io/deepcuts) has no server, so it shows the sample dig only. Share the Vercel address instead.
 
@@ -34,7 +35,6 @@ To use a custom domain, add it in Vercel and add it to `SERVER_HOSTS` near the t
 
 ## Still to build
 
-- A MusicBrainz check that every recommended album exists
 - Official album artwork (Spotify or Apple Music APIs)
 - Email sign-in, so history follows people across devices
 - Privacy policy and terms (GDPR)
