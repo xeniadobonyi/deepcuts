@@ -448,7 +448,10 @@ async function checkReal(list, step, want = 5) {
     for (let attempt = 0; attempt < 2 && info.found === null; attempt++) {
       if (attempt) await new Promise((r) => setTimeout(r, 1600));
       try {
+        await mbPace();
+        const prev = mbLast; mbLast = Date.now();
         const r = await fetch("/api/cover?check=1&artist=" + encodeURIComponent(p.artist) + "&album=" + encodeURIComponent(p.album), { signal: ctl?.signal });
+        if (mbCached(r)) mbLast = prev;
         info = await r.json();
         if (info.found === undefined) info.found = null;
       } catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; info = { found: null }; }
@@ -458,7 +461,6 @@ async function checkReal(list, step, want = 5) {
       // Facts shown on the page come from MusicBrainz, not from the AI.
       out.push({ ...p, artist: info.artist || p.artist, album: info.title || p.album, year: info.year || "", label: "", rgId: info.mbid || "", verified: true, cover: info.cover || "" });
     }
-    if (i < list.length - 1 && out.length < want) await new Promise((r) => setTimeout(r, 1100));
   }
   return out;
 }
@@ -725,15 +727,19 @@ document.querySelectorAll("input[name='digMode']").forEach((r) => r.addEventList
 // The AI then only chooses among them and explains, using the facts it is given.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let mbLast = 0;
+// MusicBrainz allows about one lookup a second. Answers from Vercel's cache never reach MusicBrainz,
+// so they don't count: only real lookups make the next one wait.
+async function mbPace() { const wait = mbLast + 1100 - Date.now(); if (wait > 0) await sleep(wait); }
+const mbCached = (r) => r?.headers?.get?.("x-vercel-cache") === "HIT";
 async function mb(entity, params = {}) {
   for (let attempt = 0; attempt < 2; attempt++) {
-    const wait = mbLast + 1100 - Date.now();
-    if (wait > 0) await sleep(wait);
-    mbLast = Date.now();
+    await mbPace();
+    const prev = mbLast; mbLast = Date.now();
     if (ctl?.signal.aborted) throw { code: "cancelled" };
     let r;
     try { r = await fetch("/api/mb?e=" + encodeURIComponent(entity) + "&" + new URLSearchParams(params), { signal: ctl?.signal }); }
     catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; return null; }
+    if (mbCached(r)) mbLast = prev;
     if (r.ok) { try { return await r.json(); } catch { return null; } }
     if (r.status !== 503) return null;
     await sleep(1500);
@@ -753,7 +759,7 @@ async function gatherCandidates(seedList, onStep) {
   const seeds = [], cands = new Map();
   // About one MusicBrainz lookup per second: cap the optional links so a dig stays around half a minute.
   let calls = 0;
-  const budget = seedList.length > 1 ? 30 : 24;
+  const budget = seedList.length > 1 ? 27 : 20;
   const mbc = (e, p) => { calls++; return mb(e, p); };
   const few = seedList.length > 1; // with several records, follow fewer links per record to keep it quick
   // Each record gets its own share of lookups, so the first record can't use them all up.
@@ -1078,7 +1084,7 @@ async function discogsRarity(list, max = 20) {
       } catch {}
     }
   };
-  await Promise.all([worker(), worker(), worker()]);
+  await Promise.all([worker(), worker(), worker(), worker(), worker()]);
   if (ctl?.signal.aborted) throw { code: "cancelled" };
   return any;
 }
@@ -1132,6 +1138,7 @@ function queueCredits(k) {
 }
 async function pumpCredits() {
   if (creditBusy || !creditQueue.length) return;
+  if ($("digBtn").disabled) { setTimeout(pumpCredits, 3000); return; } // a dig is running: it gets the lookups first
   creditBusy = true;
   const k = creditQueue.shift(), v = reactions[k];
   try {
@@ -1232,10 +1239,9 @@ function digFromPerson(person) { return digFromRecords(person.recs); }
 // Lookups share MusicBrainz's one-per-second pace with digs, and are cached by the server.
 const SUG = { box: null, input: null, items: [], active: -1, seq: 0, timer: null };
 async function mbQuick(entity, params) {
-  const wait = mbLast + 1100 - Date.now();
-  if (wait > 0) await sleep(wait);
-  mbLast = Date.now();
-  try { const r = await fetch("/api/mb?e=" + encodeURIComponent(entity) + "&" + new URLSearchParams(params)); return r.ok ? await r.json() : null; }
+  await mbPace();
+  const prev = mbLast; mbLast = Date.now();
+  try { const r = await fetch("/api/mb?e=" + encodeURIComponent(entity) + "&" + new URLSearchParams(params)); if (mbCached(r)) mbLast = prev; return r.ok ? await r.json() : null; }
   catch { return null; }
 }
 const luc = (t) => String(t || "").replace(/[+\-&|!(){}\[\]^"~*?:\\\/]/g, " ").replace(/\s+/g, " ").trim();
@@ -1496,7 +1502,7 @@ $("digForm").addEventListener("submit", async (e) => {
         let pool = rankCandidates(candidates, seedInfo, seedList);
         if (pool.length >= 5) {
           setStatus("Checking how rare each record is on Discogs\u2026");
-          if (await discogsRarity(pool, 30)) {
+          if (await discogsRarity(pool, 24)) {
             // Keep only the most wanted famous records (the best landmarks), then strongest links first.
             const ess = pool.filter((c) => tierOf(c) === "essential").sort((a, b) => (b.dc.want || 0) - (a.dc.want || 0)).slice(0, 6);
             pool = pool.filter((c) => tierOf(c) !== "essential" || ess.includes(c));
