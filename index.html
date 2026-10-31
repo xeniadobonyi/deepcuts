@@ -207,7 +207,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="past" id="past"></div>
   </section>
 
-  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Mark each record Loved, Not for me or Already know it. The next dig uses your reactions. Picks and details are AI-generated from music knowledge, so check credits on Discogs before quoting them.</p>
+  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice. Picks and details are AI-generated from music knowledge, so check credits on Discogs before quoting them.</p>
 </div>
 
 <script>
@@ -463,7 +463,6 @@ function buildPrompt(seedList, mood) {
   const loved = byType("loved"), nope = byType("nope"), known = byType("known");
   const previous = [...new Set(digHistory.flatMap((d) => d.picks.map((p) => p.artist + " – " + p.album)))].slice(0, 80);
   const hasSeeds = seedList.length > 0, hasWords = !!mood;
-  const portrait = store.get("dc-portrait", null)?.portrait;
   return [
     "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
     hasWords ? "The listener searched for: \"" + mood + "\"" : "",
@@ -472,11 +471,9 @@ function buildPrompt(seedList, mood) {
     hasSeeds && !hasWords ? "Recommend exactly 5 albums for a listener who loves these records:" : "",
     ...seedList.map((s) => "- " + s),
     !hasSeeds ? "Recommend exactly 5 albums for that search." : "",
-    // Taste history shapes record-based digs only; a keyword search is answered on its own terms.
-    !hasWords ? "Balance: mostly records close to their taste, plus one or two that go somewhere a little unexpected, each still joined by a real, specific thread." : "",
-    !hasWords && portrait ? "Their taste so far, in summary: " + portrait : "",
-    !hasWords && loved.length ? "They loved these earlier picks (use them as extra taste signal): " + loved.join("; ") : "",
-    !hasWords && nope.length ? "They did not like these earlier picks (steer away from what they share): " + nope.join("; ") : "",
+    // Each dig answers only what was entered now. Past reactions are used only to avoid repeats, never to steer.
+    hasSeeds && seedList.length > 1 ? "First work out what these records have in common: country or city, language, scene, era, genre, label or sound. That shared ground is the core of the brief, so most picks should share it too. For example, two French records mean mostly French picks." : "",
+    hasSeeds ? "Every pick must connect directly to one of the records listed above, not to anything else. Spread the picks across those records." : "",
     "Never recommend any of these exact albums, they already know them: " + [...seedList, ...known, ...nope, ...previous].join("; "),
     "Rules:",
     "- Only real, released albums. Favour lesser-known records, deep cuts and underrated albums over famous classics.",
@@ -490,7 +487,7 @@ function buildPrompt(seedList, mood) {
     hasWords
       ? "- \"thread\": 2 to 4 words naming how it matches the search, e.g. \"Laurel Canyon, 1972\", \"West Coast soft rock\"."
       : "- \"thread\": 2 to 3 words naming the connection type, e.g. \"Shared producer\", \"Sample source\", \"Same label\", \"Scene\", \"Influence\".",
-    "- Spread the 5 picks across different artists and, where the seeds allow, different genres.",
+    "- The 5 picks must be by 5 different artists.",
     'Reply with only a JSON array of 5 objects: [{"artist": string, "album": string, "year": string|null, "label": string|null, "thread": string, "why": string}]'
   ].filter(Boolean).join("\n");
 }
@@ -724,7 +721,7 @@ function renderProfile() {
 
   if (!rs.length) {
     const e = document.createElement("p"); e.className = "empty";
-    e.textContent = "Mark records as Loved, Not for me or Already know it. Your profile builds from those reactions, and every dig uses it.";
+    e.textContent = "Mark records as Loved, Not for me or Already know it. Your profile builds from those reactions.";
     box.append(e); return;
   }
 
