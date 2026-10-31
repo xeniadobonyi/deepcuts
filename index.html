@@ -7,159 +7,131 @@
 <title>Deep Cuts</title>
 <style>[hidden]{display:none!important} img{max-width:100%} :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 <style>
-/* Layout: Swiss grid. Wide screens: section titles in a narrow left column, content in a wide right column, heavy rules between sections. Phones: one column. */
+/* Layout: a plain text document, one column, hairline rules between records. Looks unstyled; spacing and type are tuned. */
 :root {
   --bg: #ffffff;
   --fg: #111111;
-  --muted: #555555;
-  --hair: #d4d4d4;
-  --field: #ffffff;
-  --edge: #6f6f6f;
-  --red: #d2141c;
-  --on-red: #ffffff;
-  --sans: "Helvetica Neue", Helvetica, Arial, "Nimbus Sans", sans-serif;
+  --muted: #6b6b6b;
+  --rule: #d9d9d9;
+  --link: #1a33d6;
+  --visited: #5b2a9e;
+  --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --bg: #0f0f0f; --fg: #f2f2f2; --muted: #ababab; --hair: #353535; --field: #1a1a1a; --edge: #8c8c8c; --red: #ff4b52; --on-red: #0f0f0f; color-scheme: dark; }
+  :root:not([data-theme="light"]) { --bg: #121212; --fg: #e8e8e8; --muted: #9a9a9a; --rule: #333333; --link: #8ea8ff; --visited: #c3a2f2; color-scheme: dark; }
 }
-:root[data-theme="dark"] { --bg: #0f0f0f; --fg: #f2f2f2; --muted: #ababab; --hair: #353535; --field: #1a1a1a; --edge: #8c8c8c; --red: #ff4b52; --on-red: #0f0f0f; color-scheme: dark; }
+:root[data-theme="dark"] { --bg: #121212; --fg: #e8e8e8; --muted: #9a9a9a; --rule: #333333; --link: #8ea8ff; --visited: #c3a2f2; color-scheme: dark; }
 * { box-sizing: border-box; }
 body {
-  background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.5;
+  background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 28px 56px;
-  -webkit-font-smoothing: antialiased;
+  padding-block: 24px 48px;
 }
-.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; }
-.wrap > * { padding-block: 28px; }
-.wrap > * + * { border-top: 2px solid var(--fg); }
-.wrap > [hidden] + * { border-top: 2px solid var(--fg); }
+.wrap { max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+.wrap > * + * { border-top: 1px solid var(--fg); padding-top: 22px; }
+.sec-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+header { display: flex; flex-direction: column; gap: 2px; }
+.brand { font-size: 15px; font-weight: 700; margin: 0; white-space: nowrap; }
+.tagline { margin: 0; max-width: 52ch; }
+.label { font-size: 15px; color: var(--muted); }
+header .label { order: 3; }
+a { color: var(--link); text-underline-offset: 2px; }
+a:visited { color: var(--visited); }
 
-/* Header */
-header { display: flex; flex-direction: column; gap: 10px; padding-top: 0 !important; }
-.brand { font-size: clamp(44px, 12vw, 88px); font-weight: 700; letter-spacing: -0.035em; line-height: .95; margin: 0; white-space: nowrap; }
-.brand::after { content: "."; color: var(--red); }
-.tagline { margin: 0; font-size: clamp(18px, 2.4vw, 22px); line-height: 1.35; max-width: 34ch; }
-header .label { order: -1; }
-.label { font-size: 14px; color: var(--muted); }
-.sec-title { font-size: clamp(24px, 3.2vw, 30px); font-weight: 700; letter-spacing: -0.015em; line-height: 1.1; margin: 0 0 6px; text-wrap: balance; }
-a { color: var(--fg); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
-a:hover { color: var(--red); }
-:focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
-
-/* Two-column Swiss grid on wide screens */
-form, .wrap > section { display: flex; flex-direction: column; gap: 20px; }
-@media (min-width: 760px) {
-  form, .wrap > section { display: grid; grid-template-columns: 220px minmax(0, 1fr); column-gap: 48px; row-gap: 0; align-items: start; }
-  form > :first-child, .wrap > section > :first-child { grid-column: 1; grid-row: 1 / span 12; }
-  form > :not(:first-child), .wrap > section > :not(:first-child) { grid-column: 2; margin-bottom: 20px; }
-  form > :last-child, .wrap > section > :last-child { margin-bottom: 0; }
-  .foot { padding-left: 268px; }
-}
-
-/* Fields */
-fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-legend { padding: 0; margin-bottom: 8px; font-size: 15px; font-weight: 700; color: var(--fg); }
+form { display: flex; flex-direction: column; gap: 20px; }
+fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+legend { padding: 0; margin-bottom: 6px; }
 input[type=text] {
-  width: 100%; min-height: 48px; font: inherit; font-size: 16px; color: var(--fg); background: var(--field);
-  border: 1.5px solid var(--edge); border-radius: 0; padding: 10px 12px;
+  width: 100%; font: inherit; font-size: 16px; color: var(--fg); background: var(--bg);
+  border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; padding: 6px 0;
 }
-input[type=text]:hover { border-color: var(--fg); }
-input[type=text]:focus { border-color: var(--fg); }
-input[type=text]::placeholder { color: var(--muted); opacity: 1; }
-.seed-list { display: flex; flex-direction: column; gap: 8px; }
-
-/* Buttons */
-.actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+input[type=text]:focus { outline: none; border-bottom-color: var(--fg); }
+input[type=text]::placeholder { color: var(--muted); }
+button:focus-visible, a:focus-visible, input[type=range]:focus-visible { outline: 1px dotted var(--fg); outline-offset: 3px; }
+.seed-list { display: flex; flex-direction: column; gap: 6px; }
+.add-seed { align-self: flex-start; font-size: 13px; margin-top: 4px; }
+.range-row { display: flex; flex-direction: column; gap: 4px; }
+input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
+.range-ends { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+.range-now { color: var(--fg); }
+.actions { display: flex; gap: 16px; flex-wrap: wrap; align-items: baseline; }
 .btn {
-  font: inherit; font-size: 16px; font-weight: 700; min-height: 48px; padding: 10px 22px; cursor: pointer;
-  background: var(--red); color: var(--on-red); border: 1.5px solid var(--red); border-radius: 0;
+  font: inherit; font-weight: 700; color: var(--fg); background: transparent;
+  border: 1px solid var(--fg); border-radius: 0; padding: 6px 14px; cursor: pointer;
 }
-.btn:hover { background: var(--fg); border-color: var(--fg); color: var(--bg); }
-.btn:disabled { opacity: .45; cursor: default; }
-.btn:disabled:hover { background: var(--red); border-color: var(--red); color: var(--on-red); }
-.btn.ghost { background: transparent; color: var(--fg); border-color: var(--fg); font-weight: 500; }
-.btn.ghost:hover { background: var(--fg); color: var(--bg); }
-.btn.ghost:disabled:hover { background: transparent; color: var(--fg); }
-.add-seed { align-self: flex-start; min-height: 40px; padding: 6px 14px; font-size: 15px; }
-.progress { position: relative; height: 4px; background: var(--hair); overflow: hidden; }
-.progress .bar { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--red); transition: width .4s ease; }
+.btn:hover { background: var(--fg); color: var(--bg); }
+.btn:disabled { opacity: .4; cursor: default; background: transparent; color: var(--fg); }
+.btn.ghost { border: 0; padding: 0; font-weight: 400; text-decoration: underline; }
+.btn.ghost:hover { background: transparent; color: var(--fg); }
+.progress { position: relative; height: 3px; background: var(--rule); overflow: hidden; }
+.progress .bar { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--fg); transition: width .4s ease; }
 .progress.waiting .bar { width: 30%; animation: sweep 1.4s ease-in-out infinite; }
 @keyframes sweep { from { left: -30%; } to { left: 100%; } }
 @media (prefers-reduced-motion: reduce) { .progress.waiting .bar { animation: none; left: 0; } .progress .bar { transition: none; } }
-.status { font-size: 15px; color: var(--muted); min-height: 1.5em; }
-.status.err { color: var(--red); font-weight: 500; }
+.keybox { display: flex; flex-direction: column; gap: 6px; }
+.key-row { display: flex; gap: 14px; align-items: baseline; }
+#apiKey { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--fg); background: var(--bg); border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; padding: 6px 0; }
+#apiKey:focus { outline: none; border-bottom-color: var(--fg); }
+.status { font-size: 13px; color: var(--muted); min-height: 1.4em; }
+.status.err { color: var(--fg); }
 
-/* Dig */
-.crate-head { display: flex; flex-direction: column; gap: 4px; }
-.crate-head h2 { font-size: clamp(24px, 3.2vw, 30px); font-weight: 700; letter-spacing: -0.015em; line-height: 1.1; margin: 0; }
-.example-flag { font-size: 14px; color: var(--muted); }
+.crate-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.crate-head h2 { font-size: 15px; font-weight: 700; margin: 0; }
+.example-flag { font-size: 13px; color: var(--muted); }
 .crate { display: flex; flex-direction: column; }
-.pick { border-top: 1px solid var(--hair); padding-block: 22px; display: grid; grid-template-columns: 96px minmax(0, 1fr); column-gap: 20px; }
-.pick:first-child { border-top: 0; padding-top: 0; }
-.pick:last-child { padding-bottom: 0; }
-.pick-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.sleeve { width: 96px; aspect-ratio: 1; max-width: 100%; background: var(--sleeve, var(--hair)); display: flex; flex-direction: column; justify-content: space-between; padding: 7px; overflow: hidden; font-size: 10px; line-height: 1.2; color: #111; }
+.pick:first-child { padding-top: 6px; }
+.pick:last-child { border-bottom: 0; padding-bottom: 0; }
+.pick { border-bottom: 1px solid var(--rule); padding-block: 18px; display: grid; grid-template-columns: 88px 1fr; column-gap: 16px; min-width: 0; }
+.pick-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.sleeve { width: 88px; aspect-ratio: 1; max-width: 100%; border: 1px solid var(--rule); background: var(--sleeve, var(--rule)); display: flex; flex-direction: column; justify-content: space-between; padding: 6px; overflow: hidden; font-family: var(--mono); font-size: 9px; line-height: 1.25; color: #111; }
 .sleeve span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .sleeve b { font-weight: 700; }
-.pick-top { display: flex; flex-direction: column; gap: 2px; }
-.pick-top > div { display: flex; flex-direction: column; }
-.artist { font-size: 21px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin: 0; overflow-wrap: anywhere; }
-.album { font-size: 18px; margin: 0; overflow-wrap: anywhere; }
-.meta { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
-.thread { align-self: flex-start; margin-top: 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--red); }
-.why { margin: 0; max-width: 64ch; }
-.why strong { font-weight: 700; }
-.links { display: flex; gap: 6px 18px; flex-wrap: wrap; font-size: 15px; }
-.links a { padding-block: 6px; }
-.react { display: flex; gap: 8px; flex-wrap: wrap; padding-top: 4px; }
-.chip {
-  font: inherit; font-size: 15px; min-height: 40px; padding: 6px 14px; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 7px;
-  background: transparent; color: var(--fg); border: 1.5px solid var(--edge); border-radius: 0;
-}
-.chip:hover { border-color: var(--fg); }
-.chip svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-.chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 700; }
-.chip[data-r="loved"][aria-pressed="true"] { background: var(--red); border-color: var(--red); color: var(--on-red); }
+@media (max-width: 420px) { .pick { grid-template-columns: 64px 1fr; column-gap: 12px; } .sleeve { width: 64px; font-size: 7.5px; padding: 4px; } }
+.pick-top { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.pick-top > div { display: flex; flex-wrap: wrap; column-gap: 6px; align-items: baseline; }
+.artist { font-size: 15px; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
+.artist::after { content: " —"; font-weight: 400; }
+.album { font-style: italic; margin: 0; overflow-wrap: anywhere; }
+.meta { flex-basis: 100%; font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.thread { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.thread::before { content: "↳ "; }
+.why { margin: 0; max-width: 62ch; }
+.links { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; }
+.react { display: flex; gap: 14px; flex-wrap: wrap; }
+.chip { font: inherit; font-size: 13px; background: none; color: var(--muted); border: 0; padding: 0; cursor: pointer; }
+.chip { display: inline-flex; align-items: center; gap: 5px; }
+.chip svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.chip:hover { color: var(--fg); }
+.chip[aria-pressed="true"] { color: var(--fg); font-weight: 700; }
+.chip[aria-pressed="true"] svg { stroke-width: 2.2; }
 .chip[data-r="loved"][aria-pressed="true"] svg { fill: currentColor; }
-@media (max-width: 480px) {
-  .pick { grid-template-columns: 68px minmax(0, 1fr); column-gap: 14px; }
-  .sleeve { width: 68px; font-size: 8px; padding: 5px; }
-}
-
-/* Profile */
-.profile { display: flex; flex-direction: column; gap: 16px; }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; }
-.stats span { display: flex; flex-direction: column; font-size: 14px; color: var(--muted); border-top: 1px solid var(--hair); padding-top: 8px; }
-.stats b { font-size: 28px; font-weight: 700; color: var(--fg); line-height: 1.1; font-variant-numeric: tabular-nums; }
-.portrait { margin: 0; max-width: 60ch; font-size: 19px; line-height: 1.4; }
-.tags { display: flex; flex-wrap: wrap; gap: 8px; }
-.tag { font-size: 14px; border: 1.5px solid var(--fg); padding: 3px 10px; }
-.facts { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 20px; }
+.profile { display: flex; flex-direction: column; gap: 12px; }
+.stats { display: flex; flex-wrap: wrap; gap: 4px 18px; font-family: var(--mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.stats b { color: var(--fg); font-weight: 700; }
+.portrait { margin: 0; max-width: 62ch; font-style: italic; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: 13px; border: 1px solid var(--rule); padding: 1px 8px; }
+.facts { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; font-size: 14px; }
 .facts dt { color: var(--muted); }
-.facts dd { margin: 0; overflow-wrap: anywhere; }
-.empty { color: var(--muted); margin: 0; max-width: 60ch; }
-@media (max-width: 480px) { .facts { grid-template-columns: 1fr; gap: 0; } .facts dd { margin-bottom: 10px; } }
-
-/* Past digs */
+.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.empty { color: var(--muted); margin: 0; max-width: 62ch; }
+@media (max-width: 420px) { .facts { grid-template-columns: 1fr; } .facts dd { margin-bottom: 6px; } }
 .past { display: flex; flex-direction: column; }
-.past details { border-top: 1px solid var(--hair); }
-.past details:first-child { border-top: 0; }
-.past summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; padding-block: 12px; min-height: 48px; }
+.past details { border-bottom: 1px solid var(--rule); padding-block: 10px; }
+.past details:last-child { border-bottom: 0; }
+.past summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .past summary::-webkit-details-marker { display: none; }
-.past summary::before { content: "+"; font-weight: 700; color: var(--red); width: 1ch; }
-.past details[open] summary::before { content: "\2212"; }
-.past summary .when { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.past summary .from { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 500; }
-.past ul { margin: 0 0 8px; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.past summary::before { content: "+ "; color: var(--muted); }
+.past details[open] summary::before { content: "− "; }
+.past summary .when { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.past summary .from { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.past ul { margin: 8px 0 4px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .past li { overflow-wrap: anywhere; }
-.past .mark { color: var(--muted); font-size: 14px; }
-.past .open-dig { margin: 4px 0 16px; min-height: 40px; padding: 6px 14px; font-size: 15px; }
-
-.foot { font-size: 15px; color: var(--muted); margin: 0; max-width: calc(64ch + 268px); }
+.past .mark { color: var(--muted); font-size: 13px; }
+.past .open-dig { margin-top: 6px; font-size: 13px; }
+.foot { font-size: 13px; color: var(--muted); margin: 0; max-width: 62ch; }
 </style>
 </head>
 <body>
@@ -177,14 +149,14 @@ input[type=text]::placeholder { color: var(--muted); opacity: 1; }
       <p class="label" style="margin:0">Start from records you love, a mood, or both.</p>
     </div>
     <fieldset>
-      <legend>Up to three records you love (artist – album)</legend>
+      <legend class="label">Up to three records you love (artist – album)</legend>
       <div class="seed-list" id="seedList">
         <input type="text" id="seed1" aria-label="Record 1" placeholder="e.g. Madvillain – Madvillainy" autocomplete="off">
       </div>
       <button type="button" class="btn ghost add-seed" id="addSeed">+ Add another record</button>
     </fieldset>
     <fieldset>
-      <legend>A mood or moment</legend>
+      <legend class="label">A mood or moment</legend>
       <input type="text" id="mood" placeholder="e.g. rainy Sunday morning, late-night drive, cooking for friends" autocomplete="off">
     </fieldset>
     <div class="actions">
@@ -193,6 +165,13 @@ input[type=text]::placeholder { color: var(--muted); opacity: 1; }
     </div>
     <div class="progress" id="progress" hidden role="progressbar" aria-label="Dig progress" aria-valuemin="0" aria-valuemax="5"><div class="bar" id="progressBar"></div></div>
     <div class="status" id="status" role="status" aria-live="polite"></div>
+    <div class="keybox" id="keyBox" hidden>
+      <p class="label" id="keyNote" style="margin:0"></p>
+      <div class="key-row">
+        <input type="password" id="apiKey" aria-label="Claude API key" placeholder="sk-ant-…" autocomplete="off">
+        <button class="btn ghost" type="button" id="saveKey">Save key</button>
+      </div>
+    </div>
   </form>
 
   <section>
@@ -200,7 +179,7 @@ input[type=text]::placeholder { color: var(--muted); opacity: 1; }
     <div class="profile" id="profile"></div>
   </section>
 
-  <section>
+  <section style="display:flex;flex-direction:column;gap:14px">
     <div class="crate-head">
       <h2 id="crateTitle">This week's dig</h2>
       <span class="example-flag" id="exampleFlag">(example)</span>
@@ -281,6 +260,77 @@ if (!Array.isArray(digHistory)) digHistory = [];
 if (!digHistory.length && current?.picks?.length) digHistory = [{ date: null, seeds: current.seeds || [], picks: current.picks }];
 let sample = null;
 let ctl = null;
+
+// Where live digs come from: Claude inside claude.ai, the Deep Cuts server (API_URL), or a Claude API key saved in this browser.
+const API_URL = ""; // set to the deployed server URL, e.g. "https://deepcuts-api.<account>.workers.dev"
+const MODEL = "claude-sonnet-5-5";
+const getKey = () => store.get("dc-api-key", "");
+const aiReady = () => !!(sample || API_URL || getKey());
+
+function parseJSONLoose(t) {
+  try { return JSON.parse(t); } catch {}
+  const f = t.match(/```(?:json)?\s*([\s\S]*?)```/); if (f) { try { return JSON.parse(f[1]); } catch {} }
+  const s = t.search(/[\[{]/), e = Math.max(t.lastIndexOf("]"), t.lastIndexOf("}"));
+  if (s >= 0 && e > s) { try { return JSON.parse(t.slice(s, e + 1)); } catch {} }
+  throw { code: "invalid_json" };
+}
+
+async function askClaude(prompt, { signal, onText } = {}) {
+  if (sample) return sample.json(prompt, { signal, cache: false, onText });
+  const direct = !API_URL, key = getKey();
+  if (direct && !key) throw { code: "no_ai" };
+  const headers = { "content-type": "application/json" };
+  let body;
+  if (direct) {
+    Object.assign(headers, { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" });
+    body = { model: MODEL, max_tokens: 3000, stream: true, messages: [{ role: "user", content: prompt }] };
+  } else body = { prompt };
+  let res;
+  try { res = await fetch(direct ? "https://api.anthropic.com/v1/messages" : API_URL, { method: "POST", headers, body: JSON.stringify(body), signal }); }
+  catch (e) { throw { code: e?.name === "AbortError" ? "cancelled" : "network" }; }
+  if (!res.ok) {
+    let msg = ""; try { msg = (await res.json())?.error?.message || ""; } catch {}
+    throw { code: res.status === 401 ? "bad_key" : res.status === 429 ? "rate_limited" : res.status === 529 ? "overloaded" : "upstream_error", message: msg };
+  }
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = "", text = "";
+  try {
+    for (;;) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        let ev; try { ev = JSON.parse(line.slice(5)); } catch { continue; }
+        if (ev.type === "content_block_delta" && ev.delta?.type === "text_delta") { text += ev.delta.text; onText?.({ text }); }
+        else if (ev.type === "error") throw { code: ev.error?.type === "overloaded_error" ? "overloaded" : "upstream_error", message: ev.error?.message };
+      }
+    }
+  } catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; throw e; }
+  return parseJSONLoose(text);
+}
+
+function renderKeyBox() {
+  const box = $("keyBox");
+  box.hidden = !!sample || !!API_URL;
+  if (box.hidden) return;
+  const has = !!getKey();
+  $("apiKey").hidden = has; $("apiKey").value = "";
+  $("keyNote").textContent = has
+    ? "Connected to Claude with your API key, saved in this browser only."
+    : "Connect Claude: paste a Claude API key to run live digs. It is saved only in this browser and sent only to Anthropic.";
+  $("saveKey").textContent = has ? "Remove key" : "Save key";
+}
+$("saveKey").onclick = () => {
+  if (getKey()) { try { localStorage.removeItem("dc-api-key"); } catch {} setStatus("Key removed."); }
+  else {
+    const v = $("apiKey").value.trim();
+    if (!v) { $("apiKey").focus(); return; }
+    store.set("dc-api-key", v); setStatus("Connected. Press Dig for five.");
+  }
+  renderKeyBox();
+};
 
 const keyOf = (p) => (p.artist + " — " + p.album).toLowerCase();
 const q = (p) => encodeURIComponent(p.artist + " " + p.album);
@@ -385,7 +435,11 @@ const ERR = {
   session_expired: "Your session has expired. Sign in to Claude again, then dig.",
   invalid_json: "The dig came back in the wrong shape. Press Dig again.",
   refused: "That request couldn't be answered. Try different records.",
-  sampling_disabled: "Claude isn't available for this account, so only the sample dig is shown."
+  sampling_disabled: "Claude isn't available for this account, so only the sample dig is shown.",
+  no_ai: "Live digs need a connection to Claude. Paste an API key in Connect Claude, below.",
+  bad_key: "That API key wasn't accepted. Check it in the Claude Console, then save it again.",
+  network: "Couldn't reach Claude. Check your connection and press Dig again.",
+  overloaded: "Claude is busy right now. Wait a minute and press Dig again."
 };
 
 $("digForm").addEventListener("submit", async (e) => {
@@ -393,7 +447,7 @@ $("digForm").addEventListener("submit", async (e) => {
   const seedList = seeds().map((s) => s.value.trim()).filter(Boolean).slice(0, MAX_SEEDS);
   const mood = $("mood").value.trim();
   if (!seedList.length && !mood) { setStatus("Add a record you love or describe a mood, then dig.", true); seeds()[0].focus(); return; }
-  if (!sample) { setStatus("Live digging is coming soon. The sample dig below shows how it works.", true); return; }
+  if (!aiReady()) { setStatus(ERR.no_ai, true); renderKeyBox(); $("apiKey").focus(); return; }
   store.set("dc-form", { seeds: seeds().map((s) => s.value).filter((v) => v.trim()), mood });
   ctl = new AbortController();
   $("digBtn").disabled = true; $("stopBtn").hidden = false;
@@ -412,7 +466,7 @@ $("digForm").addEventListener("submit", async (e) => {
     }
   };
   try {
-    const res = await sample.json(buildPrompt(seedList, mood), { signal: ctl.signal, cache: false, onText });
+    const res = await askClaude(buildPrompt(seedList, mood), { signal: ctl.signal, onText });
     bar.style.width = "100%";
     const picks = (Array.isArray(res) ? res : []).filter((p) => p && p.artist && p.album).slice(0, 5)
       .map((p) => ({ artist: String(p.artist), album: String(p.album), year: p.year ? String(p.year) : "", label: p.label ? String(p.label) : "", thread: p.thread ? String(p.thread) : "", why: p.why ? String(p.why) : "" }));
@@ -537,16 +591,16 @@ function renderProfile() {
   const note = document.createElement("span"); note.className = "status";
   if (rs.length < 3) { btn.disabled = true; note.textContent = "React to at least 3 records first."; }
   btn.onclick = async () => {
-    if (!sample) { note.textContent = "Taste summaries are coming soon."; return; }
+    if (!aiReady()) { note.textContent = "Connect Claude first, under Start a dig."; return; }
     btn.disabled = true; note.textContent = "Reading your reactions…";
     const fmt = (l) => l.map((p) => p.artist + " – " + p.album + (p.year ? " (" + p.year + (p.label ? ", " + p.label : "") + ")" : "")).join("; ") || "none";
     try {
-      const res = await sample.json([
+      const res = await askClaude([
         "Write a short music taste portrait for a listener, based only on their reactions to album recommendations.",
         "Loved: " + fmt(loved), "Not for them: " + fmt(nope), "Already knew: " + fmt(known),
         "Rules: 2 or 3 plain sentences in the second person, specific about sounds, eras, scenes or producers that appear in the lists. No flattery, no invented facts. Also give 3 to 5 short taste tags of 1 to 3 words.",
         'Reply with only JSON: {"portrait": string, "tags": [string]}'
-      ].join("\n"), { cache: false });
+      ].join("\n"));
       if (!res || !res.portrait) throw { code: "invalid_json" };
       store.set("dc-portrait", { portrait: String(res.portrait), tags: Array.isArray(res.tags) ? res.tags.map(String) : [] });
       renderProfile();
@@ -560,7 +614,7 @@ function renderProfile() {
 
 (async () => {
   try { sample = await window.claude?.use?.("sample"); } catch { sample = null; }
-  if (!sample) setStatus("Live digging is coming soon. Below is a sample dig to show how it works.");
+  if (!sample) { renderKeyBox(); if (!aiReady()) setStatus("Showing a sample dig. Connect Claude below to dig for your own records."); }
 })();
 </script>
 

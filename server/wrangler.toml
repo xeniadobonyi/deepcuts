@@ -1,0 +1,15 @@
+name = "deepcuts-api"
+main = "worker.js"
+compatibility_date = "2026-06-01"
+
+[vars]
+# Only this site may call the API. Add more origins separated by commas.
+ALLOWED_ORIGINS = "https://xeniadobonyi.github.io"
+MODEL = "claude-sonnet-5-5"
+
+# Optional: limit digs per visitor. Uncomment to enable (10 digs per minute per IP).
+# [[unsafe.bindings]]
+# name = "DIG_LIMITER"
+# type = "ratelimit"
+# namespace_id = "1001"
+# simple = { limit = 10, period = 60 }
