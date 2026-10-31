@@ -253,15 +253,15 @@ const EXAMPLE = {
   seeds: ["Madvillain – Madvillainy", "Joy Division – Unknown Pleasures", "Isaac Hayes – Hot Buttered Soul"],
   picks: [
     { artist: "Jaylib", album: "Champion Sound", year: "2003", label: "Stones Throw", thread: "Shared producer",
-      why: "Because you love Madvillainy, this is Madlib's next stop: a full album with J Dilla, released on the same label, Stones Throw. You get the same loose, dusty beats, this time traded between two of hip hop's great producers." },
+      why: "Two producers trading beats and verses over loose, dusty loops that never quite sit still. It's Madlib with J Dilla, on Stones Throw like Madvillainy." },
     { artist: "The Durutti Column", album: "The Return of the Durutti Column", year: "1980", label: "Factory", thread: "Same producer",
-      why: "Because you love Unknown Pleasures, you'll recognise the sound: Martin Hannett produced both records for Factory. Here that cold, echoing space surrounds Vini Reilly's quiet guitar pieces instead of a band." },
+      why: "Vini Reilly plays guitar like it's echoing down a stairwell, all space and no drums. Martin Hannett produced it, the same hand behind Unknown Pleasures." },
     { artist: "Shuggie Otis", album: "Inspiration Information", year: "1974", label: "Epic", thread: "Soul crate staple",
-      why: "Because you love Hot Buttered Soul, this is another soul record built on lush, patient arrangements. Shuggie Otis made most of it himself, layering instruments and an early drum machine into something warm and dreamy." },
+      why: "Warm, hazy soul built almost entirely by one person, with an early drum machine ticking under the strings. As patient as Hot Buttered Soul, but stranger." },
     { artist: "Young Marble Giants", album: "Colossal Youth", year: "1980", label: "Rough Trade", thread: "Post-punk scene",
-      why: "Because you love Unknown Pleasures, this is post-punk from the same moment, stripped to almost nothing: organ, bass, a drum machine and a quiet voice. It's for when you love the space in Joy Division more than the noise." },
+      why: "Organ, bass, a drum machine and a voice barely above a whisper. Post-punk from the same moment as Joy Division, with all the noise taken out." },
     { artist: "Galt MacDermot", album: "Shapes of Rhythm", year: "1966", label: "Kilmarnock", thread: "Sample source",
-      why: "Because you love Madvillainy and its crate-dug loops, this is a record producers went digging for. Galt MacDermot's track \"Space\" became the loop behind Busta Rhymes' \"Woo Hah!! Got You All in Check\", and the whole album is tight, funky jazz." }
+      why: "Tight, funky jazz with drums so crisp producers kept coming back to them. Its track \"Space\" is the loop behind Busta Rhymes' \"Woo Hah!! Got You All in Check\"." }
   ]
 };
 
@@ -558,6 +558,16 @@ function render(picks, isExample, fresh) {
 
 function setStatus(msg, err) { const s = $("status"); s.textContent = msg; s.classList.toggle("err", !!err); }
 
+// How every "why this record" should read: like a friend in a record shop, music first, no formula.
+const WHY_STYLE = [
+  "- \"why\": 2 short sentences, at most 40 words in total, written like a knowledgeable friend in a record shop.",
+  "  Lead with something concrete about the record itself: a sound, an instrument, a production choice, a moment worth waiting for.",
+  "  Mention the link naturally inside the text, never as the opening.",
+  "  Never start with \"Because\", \"For\", \"If you\", \"This album\", the listener's search words or the name of their record.",
+  "  Avoid filler and advert words: delivers, offers, journey, vibe, gem, timeless, perfect, showcases, blend, soundscape, gives you, a must.",
+  "  Good example: \"Vini Reilly plays guitar like it's echoing down a stairwell, all space and no drums. Martin Hannett produced it, the same hand behind Unknown Pleasures.\""
+].join("\n");
+
 function buildPrompt(seedList, mood, count = 5, avoid = []) {
   const byType = (t) => Object.values(reactions).filter((x) => x.r === t).map((x) => x.artist + " – " + x.album);
   const loved = byType("loved"), nope = byType("nope"), known = byType("known");
@@ -583,14 +593,14 @@ function buildPrompt(seedList, mood, count = 5, avoid = []) {
       : "- Each pick must connect to their records through one specific, real thread: a shared producer, engineer or session player, a sample, a label, a scene, or a direct influence.",
     "- Accuracy matters more than detail. Only state facts (years, labels, personnel, samples) you are highly confident are correct. If unsure of the year or label, use null. Never invent credits or samples.",
     hasWords
-      ? "- \"why\": 2 or 3 plain, specific sentences addressed to the listener. Start with \"For " + mood + ",\" then say how this record matches the search, then what it sounds like and what they will get from it."
-      : "- \"why\": 2 or 3 plain, specific sentences addressed to the listener. Start with \"Because you love <one of their records>,\" then name the specific thread that links them, then say what this record sounds like and what they will get from it.",
+      ? WHY_STYLE + "\n  Say how it fits the search (\"" + mood + "\") along the way."
+      : WHY_STYLE,
     hasWords
       ? "- \"thread\": 2 to 4 words naming how it matches the search, e.g. \"Laurel Canyon, 1972\", \"West Coast soft rock\"."
       : "- \"thread\": 2 to 3 words naming the connection type, e.g. \"Shared producer\", \"Sample source\", \"Same label\", \"Scene\", \"Influence\".",
     "- The " + count + " picks must be by " + count + " different artists.",
     hasSeeds && (seedList.length > 1 || hasWords)
-      ? "- Order the picks from strongest match to weakest. The first pick is the one album that best connects to ALL of the records" + (hasWords ? " and the search" : "") + " at once: it sits right in their common ground. Its \"why\" names every one of the records and explains what links them all, and its \"thread\" is \"Common ground\"."
+      ? "- Order the picks from strongest match to weakest. The first pick is the one album that best connects to ALL of the records" + (hasWords ? " and the search" : "") + " at once: it sits right in their common ground. Its \"why\" mentions what links it to all of the records, and its \"thread\" is \"Common ground\"."
       : "- Order the picks from strongest match to weakest. The first pick is the album that matches the request most completely.",
     'Reply with only a JSON array of ' + count + ' objects: [{"artist": string, "album": string, "year": string|null, "label": string|null, "thread": string, "why": string}]'
   ].filter(Boolean).join("\n");
@@ -794,9 +804,9 @@ function buildDataPrompt(seeds, mood, pool) {
     "- Prefer the most rewarding discoveries: lesser-known albums over famous ones, proper studio albums over reissues.",
     "- The connection you describe must come from the facts listed for that candidate. Do not add credits, samples, labels or places that are not listed. You may describe how the record sounds.",
     many
-      ? "- Order from strongest match to weakest. The first pick is the candidate that best sits in the common ground of all the records; its \"why\" names every one of the records, and its \"thread\" is \"Common ground\"."
+      ? "- Order from strongest match to weakest. The first pick is the candidate that best sits in the common ground of all the records; its \"why\" mentions what links it to all of the records, and its \"thread\" is \"Common ground\"."
       : "- Order from strongest match to weakest.",
-    "- \"why\": 2 or 3 plain, specific sentences to the listener. Start with \"Because you love <one of their records>,\" then give the connection from the facts, then say what the record sounds like and what they will get from it.",
+    WHY_STYLE + "\n  The link you mention must come from the facts listed for that candidate.",
     "- \"thread\": 2 to 3 words naming the connection, e.g. \"Same producer\", \"Same label\", \"Band member\", \"Common ground\".",
     'Reply with only a JSON array: [{"id": number, "thread": string, "why": string}]'
   ].filter(Boolean).join("\n");
