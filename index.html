@@ -183,7 +183,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <p class="label" style="margin:0">Start from records you love, keywords, or both.</p>
     </div>
     <fieldset>
-      <legend class="label">Up to three records you love (artist – album)</legend>
+      <legend class="label">Up to three things you love: an album, a song or an artist</legend>
       <div class="seed-list" id="seedList">
         <input type="text" id="seed1" aria-label="Record 1" placeholder="e.g. Madvillain – Madvillainy" autocomplete="off">
       </div>
@@ -553,7 +553,7 @@ function buildPrompt(seedList, mood, count = 5, avoid = []) {
     hasWords ? "The listener searched for: \"" + mood + "\"" : "",
     hasWords ? "This search is the brief. Every one of the " + count + " albums must clearly match ALL of its words, taken literally: any place, era, genre, mood, instrument or scene it names. If it names a place and a decade, every album must come from that place and that decade. Do not drift towards other styles." : "",
     hasSeeds && hasWords ? "Within that brief, lean towards records a fan of these albums would also enjoy:" : "",
-    hasSeeds && !hasWords ? "Recommend exactly " + count + " albums for a listener who loves these records:" : "",
+    hasSeeds && !hasWords ? "Recommend exactly " + count + " albums for a listener who loves these (each is an album, a song, or an artist in general):" : "",
     ...seedList.map((s) => "- " + s),
     !hasSeeds ? "Recommend exactly " + count + " albums for that search." : "",
     // Each dig answers only what was entered now. Past reactions are used only to avoid repeats, never to steer.
@@ -642,21 +642,45 @@ async function gatherCandidates(seedList, onStep) {
   for (const raw of seedList) {
     const { artist, album } = splitSeed(raw);
     onStep("Looking up " + (album || artist) + "\u2026");
-    let rg = null, artistId = null, artistName = artist;
+    // An entry can be "artist - album", "artist - song", or just an artist.
+    let rg = null, artistId = null, artistName = artist, song = "", albumPicked = false;
     if (album) {
       const sr = await mb("release-group", { query: `releasegroup:"${noQuotes(album)}" AND artist:"${noQuotes(artist)}"`, limit: 3 });
       rg = (sr?.["release-groups"] || []).find((g) => (g.score || 0) >= 80) || null;
+      if (rg) { artistId = rg["artist-credit"]?.[0]?.artist?.id; artistName = rg["artist-credit"]?.[0]?.artist?.name || artist; }
+      else {
+        // Not an album: maybe a song. Use the album it first appeared on.
+        onStep("Looking for the song " + album + "\u2026");
+        const rs = await mb("recording", { query: `recording:"${noQuotes(album)}" AND artist:"${noQuotes(artist)}"`, limit: 5 });
+        const rec = (rs?.recordings || []).find((r) => (r.score || 0) >= 80);
+        if (rec) {
+          song = rec.title;
+          artistId = rec["artist-credit"]?.[0]?.artist?.id; artistName = rec["artist-credit"]?.[0]?.artist?.name || artist;
+          const home = (rec.releases || [])
+            .filter((r) => r["release-group"]?.["primary-type"] === "Album" && !(r["release-group"]["secondary-types"] || []).length)
+            .sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")))[0];
+          if (home) rg = { id: home["release-group"].id, title: home["release-group"].title, "first-release-date": home.date || "" };
+        }
+      }
     }
-    if (rg) { artistId = rg["artist-credit"]?.[0]?.artist?.id; artistName = rg["artist-credit"]?.[0]?.artist?.name || artist; }
-    else {
+    if (!artistId) {
       const ar = await mb("artist", { query: `artist:"${noQuotes(artist)}"`, limit: 1 });
       const a = (ar?.artists || [])[0];
       if (a && (a.score || 0) >= 85) { artistId = a.id; artistName = a.name; }
     }
     if (!artistId) continue;
-    const seed = { artist: artistName, album: rg?.title || album, year: yearOf(rg?.["first-release-date"]), artistId, country: "", tags: [], label: null };
+    if (!rg) {
+      // Just an artist: follow the links from their first studio album.
+      const al = await mb("release-group", { artist: artistId, type: "album", limit: 25 });
+      const first = (al?.["release-groups"] || []).filter((g) => !(g["secondary-types"] || []).length && g["first-release-date"])
+        .sort((a, b) => String(a["first-release-date"]).localeCompare(String(b["first-release-date"])))[0];
+      if (first) { rg = first; albumPicked = true; }
+    }
+    const seed = { artist: artistName, album: rg?.title || "", song, albumPicked, year: yearOf(rg?.["first-release-date"]), artistId, country: "", tags: [], label: null };
     seeds.push(seed);
-    const seedName = seed.artist + (seed.album ? " \u2013 " + seed.album : "");
+    const seedName = song ? seed.artist + "\u2019s \u201c" + song + "\u201d" + (seed.album ? " (from " + seed.album + ")" : "")
+      : albumPicked ? seed.artist + "\u2019s " + seed.album
+      : seed.artist + (seed.album ? " \u2013 " + seed.album : "");
 
     // The artist: where they're from, their genres, and the artists they're linked to
     const art = await mb("artist/" + artistId, { inc: "artist-rels+tags" });
@@ -735,7 +759,7 @@ function buildDataPrompt(seeds, mood, pool) {
   return [
     "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
     "The listener loves these records. Facts from MusicBrainz:",
-    ...seeds.map((x) => "- " + x.artist + (x.album ? " \u2013 " + x.album : "") + " (" + [x.year, x.country, x.label?.name].filter(Boolean).join(", ") + (x.tags.length ? "; genres: " + x.tags.join(", ") : "") + ")"),
+    ...seeds.map((x) => "- " + (x.song ? x.artist + ", the song \u201c" + x.song + "\u201d" + (x.album ? " from the album " + x.album : "") : x.albumPicked || !x.album ? x.artist + " (the artist in general)" : x.artist + " \u2013 " + x.album) + " (" + [x.albumPicked ? "" : x.year, x.country, x.albumPicked ? "" : x.label?.name].filter(Boolean).join(", ") + (x.tags.length ? "; genres: " + x.tags.join(", ") : "") + ")"),
     mood ? "They also searched for: \"" + mood + "\". Every pick must clearly match it." : "",
     many ? "First work out what these records have in common: country, language, scene, era, genre or label. Favour candidates that share it." : "",
     "Candidate albums, each with the real connection found in MusicBrainz:",
