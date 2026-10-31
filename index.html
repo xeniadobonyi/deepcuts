@@ -42,40 +42,41 @@ a:visited { color: var(--visited); }
 
 form { display: flex; flex-direction: column; gap: 20px; }
 fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-legend { padding: 0; margin-bottom: 6px; }
-input[type=text] {
-  width: 100%; font: inherit; font-size: 16px; color: var(--fg); background: var(--bg);
-  border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; padding: 6px 0;
+legend { padding: 0; margin-bottom: 8px; }
+legend.label { color: var(--fg); font-weight: 700; font-size: 15px; }
+input[type=text], #apiKey {
+  width: 100%; min-height: 44px; font: inherit; font-size: 16px; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--muted); border-radius: 3px; padding: 10px 12px;
 }
-input[type=text]:focus { outline: none; border-bottom-color: var(--fg); }
-input[type=text]::placeholder { color: var(--muted); }
-button:focus-visible, a:focus-visible, input[type=range]:focus-visible { outline: 1px dotted var(--fg); outline-offset: 3px; }
-.seed-list { display: flex; flex-direction: column; gap: 6px; }
-.add-seed { align-self: flex-start; font-size: 13px; margin-top: 4px; }
+input[type=text]:hover, #apiKey:hover { border-color: var(--fg); }
+input[type=text]:focus, #apiKey:focus { outline: 2px solid var(--link); outline-offset: 1px; border-color: var(--fg); }
+input[type=text]::placeholder, #apiKey::placeholder { color: var(--muted); opacity: 1; }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.seed-list { display: flex; flex-direction: column; gap: 8px; }
+.add-seed { align-self: flex-start; margin-top: 2px; }
 .range-row { display: flex; flex-direction: column; gap: 4px; }
 input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .range-ends { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
 .range-now { color: var(--fg); }
 .actions { display: flex; gap: 16px; flex-wrap: wrap; align-items: baseline; }
 .btn {
-  font: inherit; font-weight: 700; color: var(--fg); background: transparent;
-  border: 1px solid var(--fg); border-radius: 0; padding: 6px 14px; cursor: pointer;
+  font: inherit; font-size: 16px; font-weight: 700; min-height: 44px; color: var(--bg); background: var(--fg);
+  border: 1px solid var(--fg); border-radius: 3px; padding: 10px 20px; cursor: pointer;
 }
-.btn:hover { background: var(--fg); color: var(--bg); }
-.btn:disabled { opacity: .4; cursor: default; background: transparent; color: var(--fg); }
-.btn.ghost { border: 0; padding: 0; font-weight: 400; text-decoration: underline; }
-.btn.ghost:hover { background: transparent; color: var(--fg); }
+.btn:hover { opacity: .85; }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn.ghost { color: var(--fg); background: var(--bg); border-color: var(--muted); font-weight: 500; font-size: 15px; min-height: 40px; padding: 8px 14px; }
+.btn.ghost:hover { opacity: 1; border-color: var(--fg); }
 .progress { position: relative; height: 3px; background: var(--rule); overflow: hidden; }
 .progress .bar { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--fg); transition: width .4s ease; }
 .progress.waiting .bar { width: 30%; animation: sweep 1.4s ease-in-out infinite; }
 @keyframes sweep { from { left: -30%; } to { left: 100%; } }
 @media (prefers-reduced-motion: reduce) { .progress.waiting .bar { animation: none; left: 0; } .progress .bar { transition: none; } }
 .keybox { display: flex; flex-direction: column; gap: 6px; }
-.key-row { display: flex; gap: 14px; align-items: baseline; }
-#apiKey { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: var(--fg); background: var(--bg); border: 0; border-bottom: 1px solid var(--rule); border-radius: 0; padding: 6px 0; }
-#apiKey:focus { outline: none; border-bottom-color: var(--fg); }
-.status { font-size: 13px; color: var(--muted); min-height: 1.4em; }
-.status.err { color: var(--fg); }
+.key-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+#apiKey { flex: 1; width: auto; min-width: 200px; }
+.status { font-size: 14px; color: var(--muted); min-height: 1.4em; }
+.status.err { color: var(--fg); font-weight: 500; }
 
 .crate-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .crate-head h2 { font-size: 15px; font-weight: 700; margin: 0; }
@@ -99,12 +100,12 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .thread::before { content: "↳ "; }
 .why { margin: 0; max-width: 62ch; }
 .links { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; }
-.react { display: flex; gap: 14px; flex-wrap: wrap; }
-.chip { font: inherit; font-size: 13px; background: none; color: var(--muted); border: 0; padding: 0; cursor: pointer; }
-.chip { display: inline-flex; align-items: center; gap: 5px; }
+.react { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.chip { font: inherit; font-size: 14px; background: var(--bg); color: var(--fg); border: 1px solid var(--muted); border-radius: 3px; padding: 6px 12px; min-height: 36px; cursor: pointer; }
+.chip { display: inline-flex; align-items: center; gap: 6px; }
 .chip svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
-.chip:hover { color: var(--fg); }
-.chip[aria-pressed="true"] { color: var(--fg); font-weight: 700; }
+.chip:hover { border-color: var(--fg); }
+.chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 700; }
 .chip[aria-pressed="true"] svg { stroke-width: 2.2; }
 .chip[data-r="loved"][aria-pressed="true"] svg { fill: currentColor; }
 .profile { display: flex; flex-direction: column; gap: 12px; }
@@ -148,7 +149,6 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 
 <div class="wrap">
   <header>
-    <span class="label">Five records a week · explained</span>
     <h1 class="brand">Deep Cuts</h1>
     <p class="tagline">Tell it three records you love. It digs out five you probably haven't heard, and tells you why.</p>
   </header>
