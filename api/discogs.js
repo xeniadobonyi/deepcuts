@@ -28,6 +28,8 @@ module.exports = async function handler(req, res) {
   const token = process.env.DISCOGS_TOKEN;
   if (!token) return send(200, { enabled: false }, "public, s-maxage=300");
   if (url.searchParams.get("credits") === "1") return credits(url, artist, album, token, send);
+  if (url.searchParams.get("find") === "1") return find(url, artist, token, send);
+  if (url.searchParams.get("seed") === "1") return seedBundle(url, artist, token, send);
   if (!artist || !album) return send(400, { enabled: true, error: "artist and album are required" });
 
   let data;
@@ -108,4 +110,96 @@ async function credits(url, artist, album, token, send) {
   } catch {
     return send(503, { enabled: true, found: null });
   }
+}
+
+// ---------- Backup for records MusicBrainz doesn't know (new and underground releases) ----------
+const titleOf = (x) => { const t = String(x.title || ""), i = t.indexOf(" - "); return i >= 0 ? t.slice(i + 3) : t; };
+const artistOf = (x) => { const t = String(x.title || ""), i = t.indexOf(" - "); return (i >= 0 ? t.slice(0, i) : "").replace(/\s+\(\d+\)$/, "").replace(/\*$/, ""); };
+const plainName = (n) => String(n || "").replace(/\s+\(\d+\)$/, "").replace(/\*$/, "").trim();
+
+// Search Discogs for "artist – title", where the title can be a release or a track on one.
+async function lookup(artist, title, token) {
+  const tries = title
+    ? [{ artist, release_title: title }, { artist, track: title }, { q: artist + " " + title }]
+    : [{ artist }, { q: artist }];
+  for (const t of tries) {
+    const r = await dcGet("/database/search?" + new URLSearchParams({ type: "release", per_page: "10", ...t }), token);
+    if (r.status === 401 || r.status === 403) return { disabled: true };
+    if (!r.ok) return { busy: true };
+    const list = ((await r.json()).results || []).filter((x) => !artist || squash(artistOf(x)).includes(squash(artist).slice(0, 6)) || t.q);
+    if (list.length) return { list, viaTrack: !!t.track };
+  }
+  return { list: [] };
+}
+
+//   /api/discogs?find=1&artist=…&title=…   → {enabled, items: [{artist, title, year, format, song}]}  (suggestions)
+async function find(url, artist, token, send) {
+  const title = clean(url.searchParams.get("title"));
+  if (!artist) return send(400, { enabled: true, error: "artist is required" });
+  try {
+    const f = await lookup(artist, title, token);
+    if (f.disabled) return send(200, { enabled: false }, "public, s-maxage=60");
+    if (f.busy) return send(503, { enabled: true, items: null });
+    const seen = new Set(), items = [];
+    for (const x of f.list) {
+      const a = artistOf(x), t = titleOf(x), k = squash(a + t);
+      if (!a || !t || seen.has(k)) continue; seen.add(k);
+      items.push({ artist: a, title: t, year: String(x.year || ""), format: (x.format || []).find((v) => /LP|EP|Album|Single|12"|7"|Cassette|File/.test(v)) || "", song: f.viaTrack ? title : "" });
+      if (items.length === 4) break;
+    }
+    return send(200, { enabled: true, items }, "public, s-maxage=21600");
+  } catch { return send(503, { enabled: true, items: null }); }
+}
+
+//   /api/discogs?seed=1&artist=…&title=…   → the record plus real neighbours to dig from:
+//   {enabled, found, release: {artist, title, year, label, styles, genres, song}, label: [...], people: [{name, role, records: [...]}]}
+async function seedBundle(url, artist, token, send) {
+  const title = clean(url.searchParams.get("title"));
+  if (!artist) return send(400, { enabled: true, error: "artist is required" });
+  try {
+    const f = await lookup(artist, title, token);
+    if (f.disabled) return send(200, { enabled: false }, "public, s-maxage=60");
+    if (f.busy) return send(503, { enabled: true, found: null });
+    if (!f.list.length) return send(200, { enabled: true, found: false }, "public, s-maxage=21600");
+    // Prefer the original release over reissues: the earliest year among the matches.
+    const best = f.list.slice().sort((a, b) => (+a.year || 9999) - (+b.year || 9999))[0];
+    const rr = await dcGet("/releases/" + best.id, token);
+    if (!rr.ok) return send(503, { enabled: true, found: null });
+    const rel = await rr.json();
+    const mainArtists = (rel.artists || []).map((a) => plainName(a.name));
+    const lab = (rel.labels || []).find((l) => l.id && !/not on label/i.test(l.name || ""));
+    const release = {
+      artist: mainArtists.join(", ") || artistOf(best), title: rel.title || titleOf(best), year: String(rel.year || best.year || ""),
+      label: lab ? plainName(lab.name) : "", styles: rel.styles || [], genres: rel.genres || [], song: f.viaTrack ? title : "",
+      url: rel.uri || "https://www.discogs.com/release/" + rel.id
+    };
+    const own = new Set(mainArtists.map(squash));
+    const rec = (x, extra = {}) => ({ artist: plainName(x.artist), title: x.title, year: String(x.year || ""), id: x.id, ...extra });
+    // The label's other records, nearest in time first.
+    let label = [];
+    if (lab) {
+      const lr = await dcGet("/labels/" + lab.id + "/releases?per_page=60", token);
+      if (lr.ok) {
+        const seen = new Set();
+        label = ((await lr.json()).releases || [])
+          .filter((x) => x.artist && x.title && !own.has(squash(plainName(x.artist))) && !/various/i.test(x.artist))
+          .filter((x) => { const k = squash(plainName(x.artist) + x.title); return !seen.has(k) && seen.add(k); })
+          .sort((a, b) => Math.abs((+a.year || 0) - (+release.year || 0)) - Math.abs((+b.year || 0) - (+release.year || 0)))
+          .slice(0, 20).map((x) => rec(x, { label: release.label }));
+      }
+    }
+    // People credited on the record (producers, remixers, players), and their own records.
+    const credited = [...(rel.extraartists || []), ...(rel.tracklist || []).flatMap((t) => t.extraartists || [])]
+      .filter((p) => p.id && !own.has(squash(plainName(p.name))) && !/design|artwork|photo|layout|master|lacquer|liner|cover/i.test(p.role || ""));
+    const uniq = credited.filter((p, i, a) => a.findIndex((q) => q.id === p.id) === i).slice(0, 2);
+    const people = [];
+    for (const p of uniq) {
+      const ar = await dcGet("/artists/" + p.id + "/releases?per_page=30&sort=year&sort_order=desc", token);
+      if (!ar.ok) continue;
+      const records = ((await ar.json()).releases || []).filter((x) => /main/i.test(x.role || "") && x.title)
+        .slice(0, 6).map((x) => rec({ ...x, artist: x.artist || p.name }));
+      if (records.length) people.push({ name: plainName(p.name), role: p.role || "credited", records });
+    }
+    return send(200, { enabled: true, found: true, release, label, people }, "public, s-maxage=21600");
+  } catch { return send(503, { enabled: true, found: null }); }
 }

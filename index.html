@@ -663,6 +663,7 @@ function buildPrompt(seedList, mood, count = 5, avoid = []) {
     hasSeeds && hasWords ? "Within that brief, lean towards records a fan of these albums would also enjoy:" : "",
     hasSeeds && !hasWords ? "Recommend exactly " + count + " albums for a listener who loves these (each is an album, a song, or an artist in general):" : "",
     ...seedList.map((s) => "- " + s),
+    seedFacts.length ? "Facts about these records from MusicBrainz and Discogs (they may be new or little known, so rely on these): " + seedFacts.join("; ") : "",
     !hasSeeds ? "Recommend exactly " + count + " albums for that search." : "",
     // Each dig answers only what was entered now. Past reactions are used only to avoid repeats, never to steer.
     hasSeeds && seedList.length > 1 ? "First work out what these records have in common: country or city, language, scene, era, genre, label or sound. That shared ground is the core of the brief, so most picks should share it too. For example, two French records mean mostly French picks." : "",
@@ -766,6 +767,7 @@ async function gatherCandidates(seedList, onStep) {
     if (!e.year && c.year) e.year = c.year;
     if (!e.label && c.label) e.label = c.label;
     if (!e.rgId && c.rgId) e.rgId = c.rgId;
+    if (!e.dcId && c.dcId) e.dcId = c.dcId;
     if (fact && !e.facts.includes(fact)) e.facts.push(fact);
   };
   for (const [seedIdx, raw] of seedList.entries()) {
@@ -812,6 +814,21 @@ async function gatherCandidates(seedList, onStep) {
             .sort((x, y) => String(x.date || "9999").localeCompare(String(y.date || "9999")))[0];
           if (home) rg = { id: home["release-group"].id, title: home["release-group"].title, "first-release-date": home.date || "" };
         }
+      }
+    }
+    if (!artistId || (album && !rg)) {
+      // MusicBrainz doesn't know this artist or record (yet): dig from Discogs instead.
+      onStep("Looking " + (album || artist) + " up on Discogs\u2026");
+      const ds = await discogsAsk({ seed: "1", artist, title: album || "" });
+      if (ds?.found) {
+        const R = ds.release;
+        const seed = { artist: R.artist, album: R.title, song: R.song || "", albumPicked: false, year: R.year, artistId: null, country: "",
+          tags: [...(R.styles || []), ...(R.genres || [])].slice(0, 5), label: R.label ? { id: null, name: R.label } : null, src: "discogs" };
+        seeds.push(seed);
+        const seedName = R.song ? R.artist + "\u2019s \u201c" + R.song + "\u201d (from " + R.title + ")" : R.artist + " \u2013 " + R.title;
+        for (const x of ds.label || []) add({ artist: x.artist, album: x.title, year: x.year, label: R.label, dcId: x.id }, `Released on ${R.label}, the same label as ${seedName}`);
+        for (const pp of ds.people || []) for (const x of pp.records) add({ artist: x.artist, album: x.title, year: x.year, label: "", dcId: x.id }, `${pp.name} is credited on ${seedName} (${pp.role}) and made this record`);
+        continue;
       }
     }
     if (!artistId) continue;
@@ -972,7 +989,7 @@ function rankCandidates(candidates, seeds, seedList) {
   const perArtist = {};
   const score = (c) => c.facts.length + (c.sample ? 3 : 0) + 2 * ((c.from || []).length - 1);
   const ranked = candidates
-    .filter((c) => c.rgId && c.artist && !seedArtists.has(lc(c.artist)) && !seen.has(keyOf(c)) && !/various artists/i.test(c.artist))
+    .filter((c) => (c.rgId || c.dcId) && c.artist && !seedArtists.has(lc(c.artist)) && !seen.has(keyOf(c)) && !/various artists/i.test(c.artist))
     .sort((a, b) => score(b) - score(a))
     .filter((c) => { const k = lc(c.artist); perArtist[k] = (perArtist[k] || 0) + 1; return perArtist[k] <= 2; });
   // With several records, take turns between them so each record gets its share of the best candidates.
@@ -1029,8 +1046,8 @@ function pickFromPool(res, pool) {
       artist: c.artist, album: c.album, year: c.year || "", label: c.label || "",
       thread: String(o.thread || "").trim(), why: String(o.why || o.reason || "").trim(),
       rgId: c.rgId || "", cover: c.rgId ? "https://coverartarchive.org/release-group/" + c.rgId + "/front-250" : "",
-      verified: c.rgId ? true : null,
-      dc: c.dc || null
+      verified: c.rgId || c.dcId ? true : null,
+      dc: c.dc || (c.dcId ? { url: "https://www.discogs.com/release/" + c.dcId, have: 0, want: 0, at: 0 } : null)
     });
     if (out.length === 5) break;
   }
@@ -1071,9 +1088,22 @@ const isMainstream = (c) => !!c.dc && (c.dc.many || c.dc.have > ownerLimit());
 const rarityBonus = (c) => (!c.dc ? 0 : (c.dc.have < 1500 ? 1 : 0) + (c.dc.want > c.dc.have ? 1 : 0) - (c.dc.have > 4000 ? 1 : 0));
 // Leave out mainstream records when enough others remain.
 const dropMainstream = (list, keep) => { const rare = list.filter((c) => !isMainstream(c)); return rare.length >= keep ? rare : list; };
-const rarityBars = (dc) => { if (!dc) return 0; const h = dc.have || 0; return dc.many ? 1 : h < 250 ? 5 : h < 1000 ? 4 : h < 3000 ? 3 : h < 8000 ? 2 : 1; };
+const rarityBars = (dc) => { if (!dc || !dc.at) return 0; // no counts yet (just a Discogs link)
+  const h = dc.have || 0; return dc.many ? 1 : h < 250 ? 5 : h < 1000 ? 4 : h < 3000 ? 3 : h < 8000 ? 2 : 1; };
 const dcFresh = (dc) => !!dc && Date.now() - (dc.at || 0) < DC_FRESH_MS;
 const count = (n) => Number(n || 0).toLocaleString("en");
+
+// ---------- Discogs backup for records MusicBrainz doesn't know ----------
+// New and underground releases often reach Discogs long before MusicBrainz.
+async function discogsAsk(params) {
+  if (!API_URL || sample || !discogsOn) return null;
+  try {
+    const d = await (await fetch("/api/discogs?" + new URLSearchParams(params), { signal: ctl?.signal })).json();
+    if (d?.enabled === false) { discogsOn = false; return null; }
+    return d;
+  } catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; return null; }
+}
+let seedFacts = []; // what's known about the listener's records, also given to the AI when it digs on its own
 
 // ---------- Producers and engineers of loved records ----------
 // Credits come from Discogs (richest for older and obscure records), with MusicBrainz as a backup.
@@ -1269,6 +1299,12 @@ function chooseSuggest(i) {
   closeSuggest();
   if (it.artistId) showArtistAlbums(input, it);
 }
+async function discogsItems(artist, title) {
+  const d = await discogsAsk({ find: "1", artist, title: title || "" });
+  return (d?.items || []).map((x) => x.song
+    ? { value: x.artist + " \u2013 " + x.song, label: x.artist + " \u2013 " + x.song, meta: shortMeta("Song on " + x.title + (x.year ? " (" + x.year + ")" : "")) }
+    : { value: x.artist + " \u2013 " + x.title, label: x.artist + " \u2013 " + x.title, meta: [x.year, x.format].filter(Boolean).join(" \u00b7 ") });
+}
 function rgItems(groups) {
   const seen = new Set();
   return (groups || []).filter((g) => (g.score || 0) >= 50 && ["Album", "EP"].includes(g["primary-type"]) && !(g["secondary-types"] || []).length)
@@ -1299,7 +1335,12 @@ async function runSuggest(input) {
     if (!b) return;
     const r = await mbQuick("release-group", { query: `releasegroup:(${prefixTerms(b)}) AND artist:(${fuzzyTerms(a)})`, limit: 10 });
     if (seq !== SUG.seq) return;
-    showSuggest(input, rgItems(r?.["release-groups"]), "Albums on MusicBrainz");
+    const found = rgItems(r?.["release-groups"]);
+    if (found.length) { showSuggest(input, found, "Albums on MusicBrainz"); return; }
+    // Not on MusicBrainz (new or underground): try Discogs, which also finds songs on a record.
+    const dz = await discogsItems(a, b);
+    if (seq !== SUG.seq) return;
+    showSuggest(input, dz, "Found on Discogs");
     return;
   }
   const ar = await mbQuick("artist", { query: `artist:(${fuzzyTerms(text)}) OR artist:(${prefixTerms(text)})`, limit: 4 });
@@ -1327,7 +1368,11 @@ async function runSuggest(input) {
   showSuggest(input, artists, "Artists");
   const rg = await mbQuick("release-group", { query: `releasegroup:(${prefixTerms(text)})`, limit: 10 });
   if (seq !== SUG.seq) return;
-  showSuggest(input, artists.concat(rgItems(rg?.["release-groups"]).slice(0, 4)), "Artists and albums");
+  const both = artists.concat(rgItems(rg?.["release-groups"]).slice(0, 4));
+  if (both.length) { showSuggest(input, both, "Artists and albums"); return; }
+  const dz = await discogsItems(text, "");
+  if (seq !== SUG.seq) return;
+  showSuggest(input, dz, "Found on Discogs");
 }
 
 // "Did you mean…?" after leaving a field: compare what was typed with MusicBrainz's spelling.
@@ -1387,6 +1432,7 @@ $("digForm").addEventListener("submit", async (e) => {
   closeSuggest();
   const deeper = deeperNext && !!current; deeperNext = false;
   digDepth = deeper ? (current.depth || 0) + 1 : 0;
+  seedFacts = [];
   statusEl = deeper ? "deepStatus" : "status";
   $(deeper ? "status" : "deepStatus").textContent = "";
   // One mode at a time: records follow real links, a vibe is matched on its keywords.
@@ -1423,6 +1469,7 @@ $("digForm").addEventListener("submit", async (e) => {
       // Records given: find real candidates through MusicBrainz links, then let the AI choose and explain.
       try {
         const { seeds: seedInfo, candidates } = await gatherCandidates(seedList, (msg) => setStatus(msg));
+        seedFacts = seedInfo.map((x) => (x.song ? x.artist + ", the song \u201c" + x.song + "\u201d" + (x.album ? " from " + x.album : "") : x.artist + (x.album ? " \u2013 " + x.album : "")) + " (" + [x.year, x.label?.name, x.tags.join(", ")].filter(Boolean).join("; ") + ")");
         let pool = rankCandidates(candidates, seedInfo, seedList);
         if (pool.length >= 5) {
           setStatus("Checking how rare each record is on Discogs\u2026");
@@ -1501,7 +1548,7 @@ $("digForm").addEventListener("submit", async (e) => {
     renderHistory();
     renderProfile();
     render(picks, false, true, deeper);
-    setStatus((fromData ? picks.length + " real records, each found through MusicBrainz credits and labels. "
+    setStatus((fromData ? picks.length + " real records, each found through real credits and labels. "
       : dropped ? "Only " + picks.length + " records could be confirmed as real albums, so that\u2019s all this dig shows. "
       : verify ? "Five real records dug, each checked on MusicBrainz. " : "Five records dug. ") + digsLeftNote());
     $("digBtn").textContent = "Dig again";
