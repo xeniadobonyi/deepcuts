@@ -488,6 +488,9 @@ function buildPrompt(seedList, mood) {
       ? "- \"thread\": 2 to 4 words naming how it matches the search, e.g. \"Laurel Canyon, 1972\", \"West Coast soft rock\"."
       : "- \"thread\": 2 to 3 words naming the connection type, e.g. \"Shared producer\", \"Sample source\", \"Same label\", \"Scene\", \"Influence\".",
     "- The 5 picks must be by 5 different artists.",
+    hasSeeds && (seedList.length > 1 || hasWords)
+      ? "- Order the picks from strongest match to weakest. The first pick is the one album that best connects to ALL of the records" + (hasWords ? " and the search" : "") + " at once: it sits right in their common ground. Its \"why\" names every one of the records and explains what links them all, and its \"thread\" is \"Common ground\"."
+      : "- Order the picks from strongest match to weakest. The first pick is the album that matches the request most completely.",
     'Reply with only a JSON array of 5 objects: [{"artist": string, "album": string, "year": string|null, "label": string|null, "thread": string, "why": string}]'
   ].filter(Boolean).join("\n");
 }
