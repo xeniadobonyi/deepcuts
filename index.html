@@ -161,6 +161,16 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .mode-opt input:checked + span { background: var(--fg); color: var(--bg); font-weight: 700; }
 .mode-opt input:focus-visible + span { outline: 2px solid var(--link); outline-offset: -4px; }
 .dig-deeper { align-self: flex-start; margin-top: 4px; }
+.suggest { list-style: none; margin: -4px 0 0; padding: 0; border: 1px solid var(--fg); border-radius: 3px; background: var(--surface); max-height: 300px; overflow-y: auto; }
+.suggest-head { padding: 6px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--rule); }
+.suggest-opt { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 12px; min-height: 44px; box-sizing: border-box; cursor: pointer; font-size: 15px; }
+.suggest-opt + .suggest-opt { border-top: 1px solid var(--rule); }
+.suggest-opt:hover, .suggest-opt[aria-selected="true"] { background: var(--fg); color: var(--bg); }
+.suggest-opt span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.suggest-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.suggest-opt:hover .suggest-meta, .suggest-opt[aria-selected="true"] .suggest-meta { color: var(--bg); }
+.didyoumean { margin: -2px 0 0; font-size: 14px; color: var(--fg); }
+.didyoumean-btn { font: inherit; font-weight: 700; background: none; border: 0; padding: 0; color: var(--link); text-decoration: underline; cursor: pointer; }
 .react-note { font-size: 13px; color: var(--muted); align-self: center; }
 .crate-count { font-weight: 400; color: var(--muted); }
 .loved { display: flex; flex-direction: column; }
@@ -180,11 +190,6 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <p class="tagline">Tell it three records you love. It digs out five you probably haven't heard, and tells you why.</p>
   </header>
 
-  <section>
-    <h2 class="sec-title">Taste profile</h2>
-    <div class="profile" id="profile"></div>
-  </section>
-
   <form id="digForm" novalidate>
     <div>
       <h2 class="sec-title">Start a dig</h2>
@@ -197,7 +202,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <fieldset id="recordsFs">
       <legend class="label">Up to three things you love: an album, a song or an artist</legend>
       <div class="seed-list" id="seedList">
-        <input type="text" id="seed1" aria-label="Record 1" placeholder="e.g. Madvillain – Madvillainy" autocomplete="off">
+        <input type="text" id="seed1" aria-label="Record 1" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="e.g. Madvillain – Madvillainy" autocomplete="off">
       </div>
       <button type="button" class="btn ghost add-seed" id="addSeed">+ Add another record</button>
     </fieldset>
@@ -227,6 +232,11 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     </div>
     <div class="crate" id="crate"></div>
     <button type="button" class="btn ghost dig-deeper" id="digDeeper" hidden>Dig deeper: 5 more like this</button>
+  </section>
+
+  <section>
+    <h2 class="sec-title">Taste profile</h2>
+    <div class="profile" id="profile"></div>
   </section>
 
   <section>
@@ -289,6 +299,7 @@ function addSeedField(value, focus) {
   const inp = document.createElement("input");
   inp.type = "text"; inp.id = "seed" + (n + 1); inp.autocomplete = "off";
   inp.setAttribute("aria-label", "Record " + (n + 1));
+  inp.setAttribute("role", "combobox"); inp.setAttribute("aria-autocomplete", "list"); inp.setAttribute("aria-expanded", "false");
   inp.placeholder = SEED_EXAMPLES[n] || "";
   inp.value = value || "";
   $("seedList").append(inp);
@@ -531,7 +542,7 @@ function render(picks, isExample, fresh) {
       nope: '<circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/>',
       known: '<path d="M5 12.5l4.5 4.5L19 7.5"/>'
     };
-    [["loved", "Loved it"], ["nope", "Not for me"], ["known", "Already know it"]].forEach(([val, txt]) => {
+    [["loved", "Loved it"], ["nope", "Not for me"]].forEach(([val, txt]) => {
       const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.dataset.r = val;
       b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[val] + '</svg>';
       b.append(document.createTextNode(txt));
@@ -852,8 +863,165 @@ function pickFromPool(res, pool) {
   return out;
 }
 
+// ---------- Suggestions and corrections for the record fields ----------
+// While someone types, suggest real artists and albums from MusicBrainz. When they leave a field,
+// offer a correction if what they typed is close to, but not exactly, a real artist or album.
+// Lookups share MusicBrainz's one-per-second pace with digs, and are cached by the server.
+const SUG = { box: null, input: null, items: [], active: -1, seq: 0, timer: null };
+async function mbQuick(entity, params) {
+  const wait = mbLast + 1100 - Date.now();
+  if (wait > 0) await sleep(wait);
+  mbLast = Date.now();
+  try { const r = await fetch("/api/mb?e=" + encodeURIComponent(entity) + "&" + new URLSearchParams(params)); return r.ok ? await r.json() : null; }
+  catch { return null; }
+}
+const luc = (t) => String(t || "").replace(/[+\-&|!(){}\[\]^"~*?:\\\/]/g, " ").replace(/\s+/g, " ").trim();
+const fuzzyTerms = (t) => luc(t).split(" ").filter(Boolean).map((w) => (w.length > 3 ? w + "~" : w)).join(" ");
+const prefixTerms = (t) => { const ws = luc(t).split(" ").filter(Boolean); return ws.map((w, i) => (i === ws.length - 1 && w.length > 1 ? w + "*" : w)).join(" "); };
+const squash = (x) => lc(x).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+const DASH_RE = /\s+[-–—]\s*|\s*[–—]\s*/;
+
+function sugBox() {
+  if (!SUG.box) {
+    const b = document.createElement("ul");
+    b.className = "suggest"; b.id = "suggestList"; b.setAttribute("role", "listbox"); b.hidden = true;
+    b.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus in the field while choosing
+    SUG.box = b;
+  }
+  return SUG.box;
+}
+function closeSuggest() {
+  const b = sugBox(); b.hidden = true; b.replaceChildren();
+  if (SUG.input) { SUG.input.setAttribute("aria-expanded", "false"); SUG.input.removeAttribute("aria-activedescendant"); }
+  SUG.items = []; SUG.active = -1;
+}
+function showSuggest(input, items, heading) {
+  if (!items.length || document.activeElement !== input) { closeSuggest(); return; }
+  const b = sugBox(); SUG.input = input; SUG.items = items; SUG.active = -1;
+  b.replaceChildren();
+  if (heading) { const h = document.createElement("li"); h.className = "suggest-head"; h.setAttribute("role", "presentation"); h.textContent = heading; b.append(h); }
+  items.forEach((it, i) => {
+    const li = document.createElement("li");
+    li.id = "sugg-" + i; li.className = "suggest-opt"; li.setAttribute("role", "option"); li.setAttribute("aria-selected", "false");
+    const main = document.createElement("span"); main.textContent = it.label; li.append(main);
+    if (it.meta) { const m = document.createElement("span"); m.className = "suggest-meta"; m.textContent = it.meta; li.append(m); }
+    li.onclick = () => chooseSuggest(i);
+    b.append(li);
+  });
+  input.after(b); b.hidden = false;
+  input.setAttribute("aria-expanded", "true"); input.setAttribute("aria-controls", "suggestList");
+}
+function moveSuggest(d) {
+  if (!SUG.items.length) return;
+  SUG.active = (SUG.active + d + SUG.items.length) % SUG.items.length;
+  sugBox().querySelectorAll(".suggest-opt").forEach((li, i) => li.setAttribute("aria-selected", i === SUG.active ? "true" : "false"));
+  SUG.input.setAttribute("aria-activedescendant", "sugg-" + SUG.active);
+}
+function chooseSuggest(i) {
+  const it = SUG.items[i], input = SUG.input;
+  if (!it || !input) return;
+  input.value = it.value; input.dataset.picked = it.value;
+  clearCorrection(input);
+  closeSuggest();
+  if (it.artistId) showArtistAlbums(input, it);
+}
+function rgItems(groups) {
+  const seen = new Set();
+  return (groups || []).filter((g) => (g.score || 0) >= 50 && ["Album", "EP"].includes(g["primary-type"]) && !(g["secondary-types"] || []).length)
+    .map((g) => {
+      const who = creditName(g["artist-credit"]);
+      return { value: who + " – " + g.title, label: who + " – " + g.title, meta: [yearOf(g["first-release-date"]), g["primary-type"] === "EP" ? "EP" : ""].filter(Boolean).join(" · ") };
+    })
+    .filter((x) => !seen.has(squash(x.value)) && seen.add(squash(x.value)))
+    .slice(0, 6);
+}
+async function showArtistAlbums(input, artist) {
+  const seq = ++SUG.seq;
+  const r = await mbQuick("release-group", { artist: artist.artistId, type: "album", limit: 50 });
+  if (seq !== SUG.seq) return;
+  const items = (r?.["release-groups"] || []).filter((g) => !(g["secondary-types"] || []).length)
+    .sort((a, b) => String(a["first-release-date"] || "9999").localeCompare(String(b["first-release-date"] || "9999")))
+    .slice(0, 8)
+    .map((g) => ({ value: artist.name + " – " + g.title, label: g.title, meta: yearOf(g["first-release-date"]) }));
+  showSuggest(input, items, "Albums by " + artist.name + " (or keep just the artist)");
+}
+async function runSuggest(input) {
+  const text = input.value.trim();
+  const seq = ++SUG.seq;
+  if (text.length < 3 || input.dataset.picked === input.value) { closeSuggest(); return; }
+  const parts = text.split(DASH_RE).map((x) => x.trim());
+  if (parts.length >= 2 && parts[0]) {
+    const a = parts[0], b = parts.slice(1).join(" ");
+    if (!b) return;
+    const r = await mbQuick("release-group", { query: `releasegroup:(${prefixTerms(b)}) AND artist:(${fuzzyTerms(a)})`, limit: 10 });
+    if (seq !== SUG.seq) return;
+    showSuggest(input, rgItems(r?.["release-groups"]), "Albums on MusicBrainz");
+    return;
+  }
+  const ar = await mbQuick("artist", { query: `artist:(${fuzzyTerms(text)}) OR artist:(${prefixTerms(text)})`, limit: 4 });
+  if (seq !== SUG.seq) return;
+  const artists = (ar?.artists || []).filter((x) => (x.score || 0) >= 60).slice(0, 3)
+    .map((x) => ({ value: x.name, label: x.name, meta: ["Artist", x.disambiguation || x.area?.name || ""].filter(Boolean).join(" · "), artistId: x.id, name: x.name }));
+  showSuggest(input, artists, "Artists");
+  const rg = await mbQuick("release-group", { query: `releasegroup:(${prefixTerms(text)})`, limit: 10 });
+  if (seq !== SUG.seq) return;
+  showSuggest(input, artists.concat(rgItems(rg?.["release-groups"]).slice(0, 4)), "Artists and albums");
+}
+
+// "Did you mean…?" after leaving a field: compare what was typed with MusicBrainz's spelling.
+function clearCorrection(input) { const n = input.nextElementSibling?.classList?.contains("didyoumean") ? input.nextElementSibling : null; if (n) n.remove(); }
+async function checkCorrection(input) {
+  const text = input.value.trim();
+  clearCorrection(input);
+  if (text.length < 3 || input.dataset.picked === input.value) return;
+  const parts = text.split(DASH_RE).map((x) => x.trim());
+  const a = parts[0], b = parts.slice(1).join(" ");
+  let fix = "";
+  if (b) {
+    const r = await mbQuick("release-group", { query: `releasegroup:(${fuzzyTerms(b)}) AND artist:(${fuzzyTerms(a)})`, limit: 3 });
+    const g = (r?.["release-groups"] || []).find((x) => (x.score || 0) >= 80);
+    if (g) { const v = creditName(g["artist-credit"]) + " – " + g.title; if (squash(v) !== squash(text) || v.replace(/\s/g, "") !== text.replace(/\s/g, "")) fix = v; }
+    if (!g) {
+      const ar = await mbQuick("artist", { query: `artist:(${fuzzyTerms(a)})`, limit: 1 });
+      const x = (ar?.artists || [])[0];
+      if (x && (x.score || 0) >= 85 && x.name !== a) fix = x.name + " – " + b;
+    }
+  } else {
+    const ar = await mbQuick("artist", { query: `artist:(${fuzzyTerms(a)})`, limit: 1 });
+    const x = (ar?.artists || [])[0];
+    if (x && (x.score || 0) >= 85 && x.name !== a) fix = x.name;
+  }
+  if (!fix || input.value.trim() !== text || fix === text) return;
+  const hint = document.createElement("p"); hint.className = "didyoumean";
+  const btn = document.createElement("button"); btn.type = "button"; btn.className = "didyoumean-btn"; btn.textContent = fix;
+  btn.onclick = () => { input.value = fix; input.dataset.picked = fix; hint.remove(); input.focus(); };
+  hint.append("Did you mean ", btn, "?");
+  input.after(hint);
+}
+
+if (API_URL) {
+  const list = $("seedList");
+  list.addEventListener("input", (e) => {
+    const input = e.target.closest("input"); if (!input) return;
+    delete input.dataset.picked; clearCorrection(input);
+    clearTimeout(SUG.timer); SUG.timer = setTimeout(() => runSuggest(input), 350);
+  });
+  list.addEventListener("keydown", (e) => {
+    const input = e.target.closest("input"); if (!input || SUG.input !== input || sugBox().hidden) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); moveSuggest(1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); moveSuggest(-1); }
+    else if (e.key === "Enter" && SUG.active >= 0) { e.preventDefault(); chooseSuggest(SUG.active); }
+    else if (e.key === "Escape") closeSuggest();
+  });
+  list.addEventListener("focusout", (e) => {
+    const input = e.target.closest("input"); if (!input) return;
+    setTimeout(() => { if (document.activeElement !== input) { closeSuggest(); checkCorrection(input); } }, 150);
+  });
+}
+
 $("digForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  closeSuggest();
   // One mode at a time: records follow real links, a vibe is matched on its keywords.
   const vibeMode = digMode() === "vibe";
   const seedList = vibeMode ? [] : seeds().map((s) => s.value.trim()).filter(Boolean).slice(0, MAX_SEEDS);
@@ -1181,13 +1349,13 @@ function renderProfile() {
   const loved = by("loved"), nope = by("nope"), known = by("known");
 
   const stats = document.createElement("div"); stats.className = "stats";
-  [[shownKeys.size, "records shown"], [loved.length, "loved"], [nope.length, "not for me"], [known.length, "already known"], [repeats, "repeats"]]
+  [[shownKeys.size, "records shown"], [loved.length, "loved"], [nope.length, "not for me"], [repeats, "repeats"]]
     .forEach(([n, t]) => { const s = document.createElement("span"); const b = document.createElement("b"); b.textContent = n; s.append(b, " " + t); stats.append(s); });
   box.append(stats);
 
   if (!rs.length) {
     const e = document.createElement("p"); e.className = "empty";
-    e.textContent = "Mark records as Loved, Not for me or Already know it. Your profile builds from those reactions.";
+    e.textContent = "Mark records as Loved it or Not for me. Your profile builds from those reactions.";
     box.append(e); return;
   }
 
