@@ -131,6 +131,16 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .past li { overflow-wrap: anywhere; }
 .past .mark { color: var(--muted); font-size: 13px; }
 .past .open-dig { margin-top: 6px; font-size: 13px; }
+.analysis { display: flex; flex-direction: column; gap: 2px; }
+.analysis-h { margin: 6px 0 0; font-weight: 700; font-size: 13px; }
+.react-note { font-size: 13px; color: var(--muted); align-self: center; }
+.crate-count { font-weight: 400; color: var(--muted); }
+.loved { display: flex; flex-direction: column; }
+.loved-item { display: flex; flex-direction: column; gap: 6px; padding-block: 12px; border-bottom: 1px solid var(--rule); align-items: flex-start; }
+.loved-item:first-child { padding-top: 4px; }
+.loved-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.loved-head { display: flex; flex-direction: column; min-width: 0; }
+.loved-name { margin: 0; overflow-wrap: anywhere; }
 .foot { font-size: 13px; color: var(--muted); margin: 0; max-width: 62ch; }
 </style>
 </head>
@@ -185,6 +195,11 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <span class="example-flag" id="exampleFlag">(example)</span>
     </div>
     <div class="crate" id="crate"></div>
+  </section>
+
+  <section>
+    <h2 class="sec-title">Your crate <span class="crate-count" id="crateCount"></span></h2>
+    <div class="loved" id="loved"></div>
   </section>
 
   <section id="pastSec" hidden>
@@ -391,13 +406,20 @@ function render(picks, isExample, fresh) {
       b.append(document.createTextNode(txt));
       b.setAttribute("aria-pressed", reactions[k]?.r === val ? "true" : "false");
       b.onclick = () => {
-        if (reactions[k]?.r === val) delete reactions[k]; else reactions[k] = { r: val, artist: p.artist, album: p.album };
-        store.set("dc-reactions", reactions); renderHistory(); renderProfile();
+        const undo = reactions[k]?.r === val;
+        if (undo) delete reactions[k];
+        else reactions[k] = { r: val, artist: p.artist, album: p.album, year: p.year || "", label: p.label || "", thread: p.thread || "", at: Date.now() };
+        store.set("dc-reactions", reactions); renderHistory(); renderProfile(); renderCrate(); maybeAutoSummary();
         react.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", "false"));
         if (reactions[k]) b.setAttribute("aria-pressed", "true");
+        const NOTE = { loved: "Saved to your crate.", nope: "Got it, fewer like this.", known: "Noted. It won't come up again." };
+        fb.textContent = undo ? (val === "loved" ? "Removed from your crate." : "") : NOTE[val];
       };
+      b.dataset.k = k;
       react.append(b);
     });
+    const fb = document.createElement("span"); fb.className = "react-note"; fb.setAttribute("aria-live", "polite");
+    react.append(fb);
     const sleeve = document.createElement("div"); sleeve.className = "sleeve"; sleeve.setAttribute("aria-hidden", "true");
     let h2 = 0; for (const c of k) h2 = (h2 * 31 + c.charCodeAt(0)) >>> 0;
     sleeve.style.setProperty("--sleeve", `hsl(${h2 % 360} 22% 78%)`);
@@ -521,6 +543,47 @@ if (current?.picks?.length) { render(current.picks, false, false); $("digBtn").t
 else render(EXAMPLE.picks, true, false);
 renderHistory();
 renderProfile();
+renderCrate();
+
+function renderCrate() {
+  const box = $("loved"); box.replaceChildren();
+  const idx = pickIndex();
+  const items = Object.entries(reactions).filter(([, v]) => v.r === "loved")
+    .map(([k, v]) => ({ k, at: v.at || 0, ...(idx[k] || {}), ...v }))
+    .sort((a, b) => b.at - a.at);
+  $("crateCount").textContent = items.length ? "(" + items.length + ")" : "";
+  if (!items.length) {
+    const e = document.createElement("p"); e.className = "empty";
+    e.textContent = "Tap Loved it on any record and it lands here, with links to listen, so you can come back to it.";
+    box.append(e); return;
+  }
+  items.forEach((p) => {
+    const row = document.createElement("div"); row.className = "loved-item";
+    const head = document.createElement("div"); head.className = "loved-head";
+    const name = document.createElement("p"); name.className = "loved-name";
+    const b = document.createElement("b"); b.textContent = p.artist;
+    name.append(b, document.createTextNode(" — "), Object.assign(document.createElement("i"), { textContent: p.album }));
+    const meta = document.createElement("span"); meta.className = "meta"; meta.textContent = [p.year, p.label].filter(Boolean).join(" · ");
+    head.append(name); if (meta.textContent) head.append(meta);
+    const rm = document.createElement("button"); rm.type = "button"; rm.className = "chip"; rm.textContent = "Remove";
+    rm.setAttribute("aria-label", "Remove " + p.artist + " — " + p.album + " from your crate");
+    rm.onclick = () => {
+      delete reactions[p.k]; store.set("dc-reactions", reactions);
+      document.querySelectorAll(".chip[data-r='loved']").forEach((c) => { if (c.dataset.k === p.k) c.setAttribute("aria-pressed", "false"); });
+      renderCrate(); renderProfile(); renderHistory(); maybeAutoSummary();
+    };
+    const links = document.createElement("div"); links.className = "links";
+    links.append(
+      linkEl("YouTube", "https://www.youtube.com/results?search_query=" + q(p) + "+full+album"),
+      linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
+      linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
+      linkEl("Bandcamp", "https://bandcamp.com/search?q=" + q(p)),
+      linkEl("Discogs", "https://www.discogs.com/search/?type=all&q=" + q(p))
+    );
+    row.append(head, links, rm);
+    box.append(row);
+  });
+}
 
 function renderHistory() {
   const box = $("past"); box.replaceChildren();
@@ -563,6 +626,52 @@ function tally(list, fn) {
   return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => n > 1 ? k + " (" + n + ")" : k).join(", ");
 }
 
+let summarizing = false, summaryTimer = null, profileNote = "";
+
+async function writeSummary(manual) {
+  if (summarizing) return;
+  if (!aiReady()) { if (manual) { profileNote = "Taste analysis isn't switched on for this address yet."; renderProfile(); } return; }
+  const idx = pickIndex();
+  const rs = Object.entries(reactions);
+  if (rs.length < 3) return;
+  const by = (t) => rs.filter(([, v]) => v.r === t).map(([k, v]) => ({ ...v, ...(idx[k] || {}) }));
+  const fmt = (l) => l.map((p) => p.artist + " \u2013 " + p.album + (p.year ? " (" + p.year + (p.label ? ", " + p.label : "") + ")" : "")).join("; ") || "none";
+  summarizing = true; profileNote = ""; renderProfile();
+  try {
+    const res = await askClaude([
+      "Analyse a listener's music taste from their reactions to album recommendations.",
+      "Loved: " + fmt(by("loved")),
+      "Not for them: " + fmt(by("nope")),
+      "Already knew (shows familiarity, not necessarily love): " + fmt(by("known")),
+      "Write two short parts in the second person:",
+      "- loves: 2 or 3 sentences on what they are drawn to: sounds, eras, scenes, production styles, moods. Point out patterns across the loved records.",
+      "- avoids: 1 or 2 sentences on what seems not to work for them, in contrast with what they love. If nothing is marked Not for them, return an empty string.",
+      "Be specific and plain. No flattery and no invented facts: base every claim on the lists. Also give 3 to 5 short taste tags of 1 to 3 words.",
+      'Reply with only JSON: {"loves": string, "avoids": string, "tags": [string]}'
+    ].join("\n"));
+    if (!res || !res.loves) throw { code: "invalid_json" };
+    const loves = String(res.loves), avoids = res.avoids ? String(res.avoids) : "";
+    store.set("dc-portrait", {
+      loves, avoids, tags: Array.isArray(res.tags) ? res.tags.map(String) : [],
+      portrait: loves + (avoids ? " Not for them: " + avoids : ""),
+      basis: rs.length
+    });
+  } catch (err) {
+    profileNote = err?.code === "cancelled" ? "" : (ERR[err?.code] || "Couldn't analyse your taste. Try again.");
+  } finally {
+    summarizing = false; renderProfile();
+  }
+}
+
+// Refresh the analysis on its own once there are 3 reactions, then after every 3 new ones.
+function maybeAutoSummary() {
+  const n = Object.keys(reactions).length, saved = store.get("dc-portrait", null);
+  if (n < 3 || summarizing || !aiReady()) return;
+  if (saved && Math.abs(n - (saved.basis || 0)) < 3) return;
+  clearTimeout(summaryTimer);
+  summaryTimer = setTimeout(() => writeSummary(false), 4000);
+}
+
 function renderProfile() {
   const box = $("profile"); box.replaceChildren();
   const idx = pickIndex();
@@ -585,8 +694,17 @@ function renderProfile() {
   }
 
   const saved = store.get("dc-portrait", null);
-  if (saved?.portrait) {
-    const p = document.createElement("p"); p.className = "portrait"; p.textContent = saved.portrait; box.append(p);
+  if (saved?.loves || saved?.portrait) {
+    const an = document.createElement("div"); an.className = "analysis";
+    const add = (title, text) => {
+      if (!text) return;
+      const h = document.createElement("p"); h.className = "analysis-h"; h.textContent = title;
+      const p = document.createElement("p"); p.className = "portrait"; p.textContent = text;
+      an.append(h, p);
+    };
+    add("What you love", saved.loves || saved.portrait);
+    add("What's not for you", saved.avoids);
+    box.append(an);
     if (Array.isArray(saved.tags) && saved.tags.length) {
       const tg = document.createElement("div"); tg.className = "tags";
       saved.tags.slice(0, 6).forEach((t) => { const s = document.createElement("span"); s.className = "tag"; s.textContent = String(t); tg.append(s); });
@@ -610,28 +728,12 @@ function renderProfile() {
 
   const act = document.createElement("div"); act.className = "actions";
   const btn = document.createElement("button"); btn.type = "button"; btn.className = "btn ghost"; btn.id = "portraitBtn";
-  btn.textContent = saved?.portrait ? "Update my taste summary" : "Describe my taste";
+  btn.textContent = saved?.loves || saved?.portrait ? "Refresh my taste analysis" : "Analyse my taste";
   const note = document.createElement("span"); note.className = "status";
-  if (rs.length < 3) { btn.disabled = true; note.textContent = "React to at least 3 records first."; }
-  btn.onclick = async () => {
-    if (!aiReady()) { note.textContent = "Taste summaries aren't switched on for this address yet."; return; }
-    btn.disabled = true; note.textContent = "Reading your reactions…";
-    const fmt = (l) => l.map((p) => p.artist + " – " + p.album + (p.year ? " (" + p.year + (p.label ? ", " + p.label : "") + ")" : "")).join("; ") || "none";
-    try {
-      const res = await askClaude([
-        "Write a short music taste portrait for a listener, based only on their reactions to album recommendations.",
-        "Loved: " + fmt(loved), "Not for them: " + fmt(nope), "Already knew: " + fmt(known),
-        "Rules: 2 or 3 plain sentences in the second person, specific about sounds, eras, scenes or producers that appear in the lists. No flattery, no invented facts. Also give 3 to 5 short taste tags of 1 to 3 words.",
-        'Reply with only JSON: {"portrait": string, "tags": [string]}'
-      ].join("\n"));
-      if (!res || !res.portrait) throw { code: "invalid_json" };
-      store.set("dc-portrait", { portrait: String(res.portrait), tags: Array.isArray(res.tags) ? res.tags.map(String) : [] });
-      renderProfile();
-    } catch (err) {
-      btn.disabled = false;
-      note.textContent = err?.code === "cancelled" ? "" : (ERR[err?.code] || "Couldn't write the summary. Try again.");
-    }
-  };
+  if (rs.length < 3) { btn.disabled = true; note.textContent = "React to at least 3 records and a short analysis of your taste appears here."; }
+  else if (summarizing) { btn.disabled = true; note.textContent = "Analysing your taste\u2026"; }
+  else if (profileNote) note.textContent = profileNote;
+  btn.onclick = () => writeSummary(true);
   act.append(btn, note); box.append(act);
 }
 
