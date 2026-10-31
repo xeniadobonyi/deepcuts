@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Deep Cuts learns your taste and digs for you: five records you probably haven't heard, and why.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Deep Cuts">
+<meta property="og:title" content="Deep Cuts">
+<meta property="og:description" content="Five records you probably haven't heard, through real credits and labels, and why.">
+<meta property="og:image" content="https://deepcuts-three.vercel.app/api/og">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://deepcuts-three.vercel.app/api/og">
 <title>Deep Cuts</title>
 <style>[hidden]{display:none!important} img{max-width:100%} :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 <style>
@@ -1776,7 +1785,9 @@ let crateNames = store.get("dc-crate-names", {});
 const crateName = (n) => String(crateNames[n] || "").trim() || "Crate " + (n + 1);
 function crateLink(name, recs) {
   const data = { v: 1, n: String(name).slice(0, 60), r: recs.slice(0, CRATE_SIZE).map((p) => [p.artist, p.album, p.year || "", p.rgId || ""]) };
-  return location.origin + location.pathname + "#crate=" + b64u.enc(JSON.stringify(data));
+  const enc = b64u.enc(JSON.stringify(data));
+  // On the public site, a short page address that link previews can read (/c/…); elsewhere, the page itself.
+  return API_URL ? location.origin + "/c/" + enc : location.origin + location.pathname + "#crate=" + enc;
 }
 // Links come from anyone: read them strictly, as plain text, with limits.
 function readSharedCrate(hash) {
