@@ -1147,8 +1147,9 @@ $("digDeeper").onclick = () => {
 
 // Initial state
 const saved = store.get("dc-form", null);
-// After a reload the form starts empty, ready for a new dig; only the chosen mode is remembered.
-if (saved?.mode === "vibe") $("modeVibe").checked = true;
+// After a reload the form starts empty, ready for a new dig, always on "Records I love".
+// (Set it explicitly, because some browsers restore the last radio choice on reload.)
+$("modeRecords").checked = true;
 setDigMode();
 const shortDate = (iso) => { try { return iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : ""; } catch { return ""; } };
 if (current?.picks?.length) {
