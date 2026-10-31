@@ -160,9 +160,6 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .mode-opt + .mode-opt span { border-left: 1px solid var(--fg); }
 .mode-opt input:checked + span { background: var(--fg); color: var(--bg); font-weight: 700; }
 .mode-opt input:focus-visible + span { outline: 2px solid var(--link); outline-offset: -4px; }
-.player { margin: 0 0 0 auto; font-family: var(--mono); font-size: 12px; line-height: 1.25; color: var(--fg); max-width: 100%; overflow-x: auto; }
-@media (max-width: 480px) { .player { margin-left: 0; } }
-.player .spin { color: var(--pink); font-weight: 700; }
 .react-note { font-size: 13px; color: var(--muted); align-self: center; }
 .crate-count { font-weight: 400; color: var(--muted); }
 .loved { display: flex; flex-direction: column; }
@@ -210,14 +207,6 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="actions">
       <button class="btn" type="submit" id="digBtn">Dig for five</button>
       <button class="btn ghost" type="button" id="stopBtn" hidden>Stop</button>
-      <pre class="player" aria-hidden="true">+------------------------+
-|    .-------.      .-.  |
-|   /  .---.  \    ( o ) |
-|  |  ( <span class="spin">@@</span> )  |_  / /    |
-|   \  '---'  /_\/ /     |
-|    '-------'  '--'     |
-|   33  45          [&gt;]  |
-+------------------------+</pre>
     </div>
     <div class="progress" id="progress" hidden role="progressbar" aria-label="Dig progress" aria-valuemin="0" aria-valuemax="5"><div class="bar" id="progressBar"></div></div>
     <div class="status" id="status" role="status" aria-live="polite"></div>
@@ -622,44 +611,6 @@ const ERR = {
   overloaded: "Claude is busy right now. Wait a minute and press Dig again."
 };
 
-// The little record player beside the Dig button plays while a dig runs:
-// the centre turns and a mark travels round the record, like the label on a spinning disc.
-const PLAYER_ROWS = [
-  "+------------------------+",
-  "|    .-------.      .-.  |",
-  "|   /  .---.  \\    ( o ) |",
-  "|  |  ( @@ )  |_  / /    |",
-  "|   \\  '---'  /_\\/ /     |",
-  "|    '-------'  '--'     |",
-  "|   33  45          [>]  |",
-  "+------------------------+"
-];
-const ORBIT = [[2, 6], [2, 12], [3, 13], [4, 12], [4, 6], [3, 4]]; // clockwise round the groove
-const CENTRE = ["--", "\\\\", "||", "//"];
-let spinTimer = null;
-function drawPlayer(step) {
-  const el = document.querySelector(".player");
-  if (!el) return;
-  const esc = (c) => (c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === "&" ? "&amp;" : c);
-  const mark = step == null ? null : ORBIT[step % ORBIT.length];
-  el.innerHTML = PLAYER_ROWS.map((row, r) => {
-    let out = "";
-    for (let c = 0; c < row.length; c++) {
-      if (r === 3 && c === 8) { out += '<span class="spin">' + (step == null ? "@@" : CENTRE[step % CENTRE.length]) + "</span>"; c++; continue; }
-      if (mark && r === mark[0] && c === mark[1]) { out += '<span class="spin">*</span>'; continue; }
-      if (step != null && r === 6 && c === 21) { out += step % 2 ? "&gt;" : " "; continue; } // the play light blinks
-      out += esc(row[c]);
-    }
-    return out;
-  }).join("\n");
-}
-function startSpin() {
-  if (spinTimer || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-  let i = 0;
-  drawPlayer(i);
-  spinTimer = setInterval(() => drawPlayer(++i), 160);
-}
-function stopSpin() { clearInterval(spinTimer); spinTimer = null; drawPlayer(null); }
 
 // ---------- Dig mode: "Records I love" or "A vibe" ----------
 function digMode() { return $("modeVibe").checked ? "vibe" : "records"; }
@@ -889,7 +840,6 @@ $("digForm").addEventListener("submit", async (e) => {
   setStatus("Digging through the crates… this can take up to a minute.");
   const prog = $("progress"), bar = $("progressBar");
   let found = 0, target = 5, dropped = 0;
-  startSpin();
   prog.hidden = false; prog.classList.add("waiting"); bar.style.width = ""; prog.removeAttribute("aria-valuenow");
   const onText = ({ text }) => {
     const n = Math.min(target, (text.match(/"why"\s*:\s*"(?:[^"\\]|\\.)*"/g) || []).length);
@@ -976,7 +926,6 @@ $("digForm").addEventListener("submit", async (e) => {
     }
   } finally {
     $("digBtn").disabled = false; $("stopBtn").hidden = true;
-    stopSpin();
     setTimeout(() => { $("progress").hidden = true; $("progress").classList.remove("waiting"); $("progressBar").style.width = "0"; }, 450);
   }
 });
