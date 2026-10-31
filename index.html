@@ -102,6 +102,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .thread { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
 .thread::before { content: "↳ "; }
 .why { margin: 0; max-width: 62ch; }
+.rarity { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .links { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; }
 .react { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .chip { font: inherit; font-size: 14px; background: var(--surface); color: var(--fg); border: 1px solid var(--muted); border-radius: 3px; padding: 6px 12px; min-height: 36px; cursor: pointer; }
@@ -249,7 +250,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="past" id="past"></div>
   </section>
 
-  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice. Picks and details are AI-generated from music knowledge, so check credits on Discogs before quoting them. Album data from MusicBrainz. Covers from the Cover Art Archive.</p>
+  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice. Picks and details are AI-generated from music knowledge, so check credits on Discogs before quoting them. Album data from MusicBrainz. Covers from the Cover Art Archive. Owner counts from Discogs: this site uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. “Discogs” is a trademark of Zink Media, LLC.</p>
 </div>
 
 <script>
@@ -534,8 +535,13 @@ function render(picks, isExample, fresh) {
       linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
       linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
       linkEl("Bandcamp", "https://bandcamp.com/search?q=" + q(p)),
-      linkEl("Discogs", "https://www.discogs.com/search/?type=all&q=" + q(p))
+      linkEl("Discogs", p.dc?.url || "https://www.discogs.com/search/?type=all&q=" + q(p))
     );
+    let rarity = null;
+    if (dcFresh(p.dc)) {
+      rarity = document.createElement("p"); rarity.className = "rarity";
+      rarity.append(count(p.dc.have) + (p.dc.many ? "+" : "") + " own it \u00b7 " + count(p.dc.want) + " want it. ", linkEl("Data provided by Discogs.", p.dc.url));
+    }
     const react = document.createElement("div"); react.className = "react";
     const k = keyOf(p);
     const ICONS = {
@@ -571,7 +577,9 @@ function render(picks, isExample, fresh) {
     sleeve.append(sa, sAl);
     queueCover(sleeve, p);
     const body = document.createElement("div"); body.className = "pick-body";
-    body.append(top, why, links, react);
+    body.append(top, why);
+    if (rarity) body.append(rarity);
+    body.append(links, react);
     el.append(sleeve, body);
     crate.append(el);
   });
@@ -888,10 +896,11 @@ function buildDataPrompt(seeds, mood, pool) {
     mood ? "They also searched for: \"" + mood + "\". Every pick must clearly match it." : "",
     many ? "First work out what these records have in common: country, language, scene, era, genre or label. Favour candidates that share it." : "",
     "Candidate albums, each with the real connection found in MusicBrainz:",
-    ...pool.map((c, i) => (i + 1) + ". " + c.artist + " \u2013 " + c.album + (c.year ? " (" + c.year + ")" : "") + ": " + c.facts.join("; ")),
+    ...pool.map((c, i) => (i + 1) + ". " + c.artist + " \u2013 " + c.album + (c.year ? " (" + c.year + ")" : "") + ": " + c.facts.join("; ") + (c.dc ? " [Discogs: " + c.dc.have + " own it, " + c.dc.want + " want it]" : "")),
     "Rules:",
     "- Choose exactly 5 candidates, by number, from this list only. 5 different artists.",
     "- Prefer the most rewarding discoveries: lesser-known albums over famous ones, proper studio albums over reissues.",
+    pool.some((c) => c.dc) ? "- Where Discogs counts are given, prefer records few people own, especially ones more people want than own: those are the real deep cuts. Do not mention the counts in your text." : "",
     "- The connection you describe must come from the facts listed for that candidate. Do not add credits, samples, labels or places that are not listed. You may describe how the record sounds.",
     many
       ? "- Order from strongest match to weakest. The first pick is the candidate that best sits in the common ground of all the records; its \"why\" mentions what links it to all of the records, and its \"thread\" is \"Common ground\"."
@@ -917,12 +926,46 @@ function pickFromPool(res, pool) {
       artist: c.artist, album: c.album, year: c.year || "", label: c.label || "",
       thread: String(o.thread || "").trim(), why: String(o.why || o.reason || "").trim(),
       rgId: c.rgId || "", cover: c.rgId ? "https://coverartarchive.org/release-group/" + c.rgId + "/front-250" : "",
-      verified: c.rgId ? true : null
+      verified: c.rgId ? true : null,
+      dc: c.dc || null
     });
     if (out.length === 5) break;
   }
   return out;
 }
+
+// ---------- Rarity from Discogs ----------
+// How many Discogs members own and want each record. Records almost everyone owns are left out,
+// and rare records people are hunting for come first. Skipped quietly when the site has no Discogs token.
+const MAINSTREAM_HAVE = 8000;
+const DC_FRESH_MS = 6 * 3600 * 1000; // Discogs' terms: never show counts more than 6 hours old
+let discogsOn = true;
+async function discogsRarity(list, max = 20) {
+  if (!API_URL || sample || !discogsOn) return false;
+  const todo = list.slice(0, max);
+  let next = 0, any = false;
+  const worker = async () => {
+    while (next < todo.length && discogsOn && !ctl?.signal.aborted) {
+      const c = todo[next++];
+      try {
+        const r = await fetch("/api/discogs?artist=" + encodeURIComponent(c.artist) + "&album=" + encodeURIComponent(c.album), { signal: ctl?.signal });
+        const d = await r.json();
+        if (d.enabled === false) { discogsOn = false; return; }
+        if (d.found) { c.dc = { have: d.have || 0, want: d.want || 0, url: d.url || "", many: !!d.many, at: Date.now() }; any = true; }
+      } catch {}
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  if (ctl?.signal.aborted) throw { code: "cancelled" };
+  return any;
+}
+const isMainstream = (c) => !!c.dc && (c.dc.many || c.dc.have > MAINSTREAM_HAVE);
+// Few owners, and more people wanting it than owning it: the digger's sweet spot.
+const rarityBonus = (c) => (!c.dc ? 0 : (c.dc.have < 1500 ? 1 : 0) + (c.dc.want > c.dc.have ? 1 : 0) - (c.dc.have > 4000 ? 1 : 0));
+// Leave out mainstream records when enough others remain.
+const dropMainstream = (list, keep) => { const rare = list.filter((c) => !isMainstream(c)); return rare.length >= keep ? rare : list; };
+const dcFresh = (dc) => !!dc && Date.now() - (dc.at || 0) < DC_FRESH_MS;
+const count = (n) => Number(n || 0).toLocaleString("en");
 
 // ---------- Suggestions and corrections for the record fields ----------
 // While someone types, suggest real artists and albums from MusicBrainz. When they leave a field,
@@ -1160,8 +1203,14 @@ $("digForm").addEventListener("submit", async (e) => {
       // Records given: find real candidates through MusicBrainz links, then let the AI choose and explain.
       try {
         const { seeds: seedInfo, candidates } = await gatherCandidates(seedList, (msg) => setStatus(msg));
-        const pool = rankCandidates(candidates, seedInfo, seedList);
+        let pool = rankCandidates(candidates, seedInfo, seedList);
         if (pool.length >= 8) {
+          setStatus("Checking how rare each record is on Discogs\u2026");
+          if (await discogsRarity(pool, 20)) {
+            // Rare records first, among those with the strongest links.
+            pool = dropMainstream(pool, 8).map((c, i) => [c, i])
+              .sort((a, b) => (b[0].facts.length + rarityBonus(b[0])) - (a[0].facts.length + rarityBonus(a[0])) || a[1] - b[1]).map((x) => x[0]);
+          }
           setStatus("Choosing the best five from " + pool.length + " real connections\u2026");
           target = 5;
           let res;
@@ -1177,7 +1226,7 @@ $("digForm").addEventListener("submit", async (e) => {
       if (!fromData) { picks = []; found = 0; setStatus("Digging through the crates\u2026"); }
     }
     if (!fromData) {
-    target = verify ? 8 : 5;
+    target = verify ? 10 : 5;
     const prompt = buildPrompt(seedList, mood, target);
     try { picks = normalizePicks(await askClaude(prompt, { signal: ctl.signal, onText })); }
     catch (e) { if (e?.code !== "invalid_json") throw e; }
@@ -1188,6 +1237,8 @@ $("digForm").addEventListener("submit", async (e) => {
     }
     if (!picks.length) throw { code: "invalid_json" };
     if (verify) {
+      setStatus("Checking how rare each record is on Discogs\u2026");
+      if (await discogsRarity(picks, 10)) picks = dropMainstream(picks, 5);
       checkReal.busy = 0;
       setStatus("Checking each record is a real album\u2026");
       let good = await checkReal(picks, (i, n) => { bar.style.width = (62 + i * (36 / n)) + "%"; });

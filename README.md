@@ -7,6 +7,7 @@ Deep Cuts learns your taste and digs for you: five records you probably haven't 
 - `index.html`: the whole site, one static page
 - `api/cover.js`: checks each recommended album exists on MusicBrainz and finds its cover in the Cover Art Archive
 - `api/mb.js`: read-only MusicBrainz lookups (cached), used to find candidates through real links: the same label in the same years, the producers and engineers on a record, and related artists. The AI then chooses among those candidates and explains the picks.
+- `api/discogs.js`: asks Discogs how many members own and want each candidate album. Records almost everyone owns are left out and rare, sought-after ones come first. Optional: it runs only when `DISCOGS_TOKEN` is set.
 - `api/dig.js`: a small Vercel Function that sends each dig to Groq's free AI API and streams the answer back. The key stays on the server; visitors never see it or need an account.
 
 Everything runs on free tiers: Vercel Hobby for hosting and Groq's free API for the AI. Groq's free allowance is shared by all visitors, so on a very busy day digs may pause until the next day.
@@ -30,6 +31,7 @@ Optional environment variables:
 
 - `MODEL`: the Groq model to use (default `openai/gpt-oss-120b`)
 - `REQUESTS_PER_DAY`: optional limit on requests per visitor per day (off unless set)
+- `DISCOGS_TOKEN`: a free personal access token from discogs.com → Settings → Developers. Turns on the rarity filter and the "own it · want it" counts. Discogs' API terms apply: the site credits Discogs next to the counts, says it isn't affiliated with Discogs, and never shows counts more than 6 hours old.
 
 The GitHub Pages copy (xeniadobonyi.github.io/deepcuts) has no server, so it shows the sample dig only. Share the Vercel address instead.
 
