@@ -524,7 +524,7 @@ function render(picks, isExample, fresh, append) {
   const crate = $("crate");
   let firstNew = null;
   if (append) {
-    firstNew = document.createElement("p"); firstNew.className = "more-head"; firstNew.textContent = picks.length + " more like this";
+    firstNew = document.createElement("p"); firstNew.className = "more-head"; firstNew.textContent = picks.length + " more, one level deeper";
     crate.append(firstNew);
   } else crate.replaceChildren();
   $("exampleFlag").hidden = !isExample;
@@ -550,7 +550,8 @@ function render(picks, isExample, fresh, append) {
       linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
       linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
       linkEl("Bandcamp", "https://bandcamp.com/search?q=" + q(p)),
-      linkEl("Discogs", p.dc?.url || "https://www.discogs.com/search/?type=all&q=" + q(p))
+      linkEl("Discogs", p.dc?.url || "https://www.discogs.com/search/?type=all&q=" + q(p)),
+      linkEl("WhoSampled", "https://www.whosampled.com/search/?q=" + q(p))
     );
     let rarity = null;
     if (dcFresh(p.dc)) {
@@ -598,6 +599,11 @@ function render(picks, isExample, fresh, append) {
       b.dataset.k = k;
       react.append(b);
     });
+    if (!isExample) {
+      const more = document.createElement("button"); more.type = "button"; more.className = "chip"; more.textContent = "More like this";
+      more.onclick = () => digFromRecords([p]);
+      react.append(more);
+    }
     const fb = document.createElement("span"); fb.className = "react-note"; fb.setAttribute("aria-live", "polite");
     react.append(fb);
     const sleeve = document.createElement("div"); sleeve.className = "sleeve"; sleeve.setAttribute("aria-hidden", "true");
@@ -650,6 +656,7 @@ function buildPrompt(seedList, mood, count = 5, avoid = []) {
     hasSeeds ? "Every pick must connect directly to one of the records listed above, not to anything else. Spread the picks across those records." : "",
     "Never recommend any of these exact albums, they already know them: " + [...seedList, ...known, ...nope, ...previous, ...avoid].join("; "),
     "Rules:",
+    digDepth > 0 ? "- This is a deeper dig: go further underground than usual, only records few collectors own." : "",
     "- Only real, released albums. Favour lesser-known records, deep cuts and underrated albums over famous classics.",
     "- Every album must be a real release you could find on Discogs or MusicBrainz under exactly this artist name and album title. If you are not certain an album exists, leave it out. Never combine a real artist with a made-up title.",
     hasWords
@@ -733,22 +740,28 @@ async function gatherCandidates(seedList, onStep) {
   const budget = seedList.length > 1 ? 30 : 24;
   const mbc = (e, p) => { calls++; return mb(e, p); };
   const few = seedList.length > 1; // with several records, follow fewer links per record to keep it quick
-  const add = (c, fact) => {
+  // Each record gets its own share of lookups, so the first record can't use them all up.
+  const perSeed = Math.floor(budget / Math.max(1, seedList.length));
+  let curSeed = 0, seedStart = 0;
+  const add = (c, fact, sample) => {
     if (!c.artist || !c.album) return;
     const k = lc(c.artist) + "|" + lc(c.album);
-    if (!cands.has(k)) cands.set(k, { ...c, facts: [] });
+    if (!cands.has(k)) cands.set(k, { ...c, facts: [], from: [] });
     const e = cands.get(k);
+    if (!e.from.includes(curSeed)) e.from.push(curSeed);
+    if (sample) e.sample = true;
     if (!e.year && c.year) e.year = c.year;
     if (!e.label && c.label) e.label = c.label;
     if (!e.rgId && c.rgId) e.rgId = c.rgId;
     if (fact && !e.facts.includes(fact)) e.facts.push(fact);
   };
-  for (const raw of seedList) {
+  for (const [seedIdx, raw] of seedList.entries()) {
+    curSeed = seedIdx; seedStart = calls;
     let { artist, album } = splitSeed(raw);
     onStep("Looking up " + (album || artist) + "\u2026");
     // An entry can be "artist - album", "artist - song", or just an artist.
     // Find the artist first, forgiving spelling and punctuation ("corto alto" finds "Corto.Alto").
-    let rg = null, artistId = null, artistName = artist, song = "", albumPicked = false;
+    let rg = null, artistId = null, artistName = artist, song = "", songId = "", albumPicked = false;
     const norm = (x) => lc(x).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
     const pickArtist = (list) => {
       const exact = (list || []).find((a) => norm(a.name) === norm(artist) || (a.aliases || []).some((al) => norm(al.name) === norm(artist)));
@@ -779,7 +792,7 @@ async function gatherCandidates(seedList, onStep) {
         const rs = await mb("recording", { query: `recording:"${noQuotes(album)}" AND ${by}`, limit: 5 });
         const rec = (rs?.recordings || []).find((r) => (r.score || 0) >= 70);
         if (rec) {
-          song = rec.title;
+          song = rec.title; songId = rec.id;
           if (!artistId) { artistId = rec["artist-credit"]?.[0]?.artist?.id; artistName = rec["artist-credit"]?.[0]?.artist?.name || artist; }
           const home = (rec.releases || [])
             .filter((r) => r["release-group"]?.["primary-type"] === "Album" && !(r["release-group"]["secondary-types"] || []).length)
@@ -804,7 +817,7 @@ async function gatherCandidates(seedList, onStep) {
 
     // Every candidate below is an album taken straight from MusicBrainz, so it is real by definition.
     // Links are followed in order of value; optional ones stop when the lookup budget runs out.
-    const spare = () => calls < budget;
+    const spare = () => calls - seedStart < perSeed;
     const addAlbums = (groups, who, fact, max = 8) => {
       for (const g of (groups || []).filter((x) => (!x["primary-type"] || x["primary-type"] === "Album") && !(x["secondary-types"] || []).length).slice(0, max)) {
         add({ artist: who || creditName(g["artist-credit"]), album: g.title, year: yearOf(g["first-release-date"]), label: "", rgId: g.id }, fact);
@@ -830,7 +843,7 @@ async function gatherCandidates(seedList, onStep) {
       if (li) seed.label = { id: li.label.id, name: li.label.name };
       if (first) {
         onStep("Reading the credits on " + (seed.album || seed.artist) + "…");
-        const det = await mbc("release/" + first.id, { inc: "artist-rels+recordings+recording-level-rels" });
+        const det = await mbc("release/" + first.id, { inc: "artist-rels+recording-rels+recordings+recording-level-rels" });
         const credits = [...(det?.relations || [])];
         for (const m of (det?.media || [])) for (const t of (m.tracks || [])) credits.push(...(t.recording?.relations || []));
         const byPerson = new Map();
@@ -843,6 +856,35 @@ async function gatherCandidates(seedList, onStep) {
         }
         // producers and engineers first, then the session players credited most often
         people = [...byPerson.values()].sort((x, y) => (y.prod - x.prod) || (y.n - x.n)).slice(0, few ? 2 : 4);
+
+        // Samples: the original records this album's tracks sample (MusicBrainz "samples material" links).
+        let sampled = [];
+        for (const m of (det?.media || [])) for (const t of (m.tracks || [])) {
+          if (song && squash(t.title || t.recording?.title) !== squash(song)) continue;
+          for (const r of (t.recording?.relations || [])) {
+            if (r["target-type"] === "recording" && /samples material/i.test(r.type || "") && r.direction !== "backward" && r.recording?.id)
+              sampled.push({ id: r.recording.id, title: r.recording.title, by: t.title || t.recording?.title || "" });
+          }
+        }
+        if (song && songId && !sampled.length && spare()) {
+          const rc = await mbc("recording/" + songId, { inc: "recording-rels" });
+          for (const r of (rc?.relations || [])) if (r["target-type"] === "recording" && /samples material/i.test(r.type || "") && r.direction !== "backward" && r.recording?.id)
+            sampled.push({ id: r.recording.id, title: r.recording.title, by: song });
+        }
+        sampled = sampled.filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i).slice(0, few ? 2 : 5);
+        seed.samples = sampled.length;
+        for (const sm of sampled) {
+          if (!spare()) break;
+          onStep("Tracing a sample: \u201c" + sm.title + "\u201d\u2026");
+          const src = await mbc("recording/" + sm.id, { inc: "artist-credits+releases+release-groups" });
+          const who = creditName(src?.["artist-credit"]);
+          const home = (src?.releases || [])
+            .filter((r) => r["release-group"]?.id && ["Album", "EP"].includes(r["release-group"]["primary-type"]) && !(r["release-group"]["secondary-types"] || []).length)
+            .sort((x, y) => String(x.date || "9999").localeCompare(String(y.date || "9999")))[0];
+          if (!who || !home) continue;
+          add({ artist: who, album: home["release-group"].title, year: yearOf(home.date), label: "", rgId: home["release-group"].id },
+            `Sample source: \u201c${sm.by}\u201d by ${seed.artist} samples \u201c${src.title || sm.title}\u201d from this album`, true);
+        }
       }
     }
 
@@ -915,11 +957,21 @@ function rankCandidates(candidates, seeds, seedList) {
   const seedArtists = new Set(seeds.map((x) => lc(x.artist)).concat(seedList.map((x) => lc(splitSeed(x).artist))));
   const seen = new Set([...digHistory.flatMap((d) => d.picks.map(keyOf)), ...Object.keys(reactions)]);
   const perArtist = {};
-  return candidates
+  const score = (c) => c.facts.length + (c.sample ? 3 : 0) + 2 * ((c.from || []).length - 1);
+  const ranked = candidates
     .filter((c) => c.rgId && c.artist && !seedArtists.has(lc(c.artist)) && !seen.has(keyOf(c)) && !/various artists/i.test(c.artist))
-    .sort((a, b) => b.facts.length - a.facts.length)
-    .filter((c) => { const k = lc(c.artist); perArtist[k] = (perArtist[k] || 0) + 1; return perArtist[k] <= 2; })
-    .slice(0, 45);
+    .sort((a, b) => score(b) - score(a))
+    .filter((c) => { const k = lc(c.artist); perArtist[k] = (perArtist[k] || 0) + 1; return perArtist[k] <= 2; });
+  // With several records, take turns between them so each record gets its share of the best candidates.
+  if (seedList.length < 2) return ranked.slice(0, 45);
+  const lanes = seedList.map((_, i) => ranked.filter((c) => (c.from || [0])[0] === i));
+  const out = [];
+  for (let r = 0; out.length < Math.min(45, ranked.length); r++) {
+    let added = false;
+    for (const lane of lanes) if (lane[r]) { out.push(lane[r]); added = true; }
+    if (!added) break;
+  }
+  return out.slice(0, 45);
 }
 
 function buildDataPrompt(seeds, mood, pool) {
@@ -927,13 +979,16 @@ function buildDataPrompt(seeds, mood, pool) {
   return [
     "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
     "The listener loves these records. Facts from MusicBrainz:",
-    ...seeds.map((x) => "- " + (x.song ? x.artist + ", the song \u201c" + x.song + "\u201d" + (x.album ? " from the album " + x.album : "") : x.albumPicked || !x.album ? x.artist + " (the artist in general)" : x.artist + " \u2013 " + x.album) + " (" + [x.albumPicked ? "" : x.year, x.country, x.albumPicked ? "" : x.label?.name].filter(Boolean).join(", ") + (x.tags.length ? "; genres: " + x.tags.join(", ") : "") + ")"),
+    ...seeds.map((x, i) => (many ? "Record " + (i + 1) + ": " : "- ") + (x.song ? x.artist + ", the song \u201c" + x.song + "\u201d" + (x.album ? " from the album " + x.album : "") : x.albumPicked || !x.album ? x.artist + " (the artist in general)" : x.artist + " \u2013 " + x.album) + " (" + [x.albumPicked ? "" : x.year, x.country, x.albumPicked ? "" : x.label?.name].filter(Boolean).join(", ") + (x.tags.length ? "; genres: " + x.tags.join(", ") : "") + ")"),
     mood ? "They also searched for: \"" + mood + "\". Every pick must clearly match it." : "",
     many ? "First work out what these records have in common: country, language, scene, era, genre or label. Favour candidates that share it." : "",
     "Candidate albums, each with the real connection found in MusicBrainz:",
-    ...pool.map((c, i) => (i + 1) + ". " + c.artist + " \u2013 " + c.album + (c.year ? " (" + c.year + ")" : "") + ": " + c.facts.join("; ") + (c.dc ? " [Discogs: " + c.dc.have + " own it, " + c.dc.want + " want it]" : "")),
+    ...pool.map((c, i) => (i + 1) + ". " + c.artist + " \u2013 " + c.album + (c.year ? " (" + c.year + ")" : "") + (many ? " [linked to record " + (c.from || [0]).map((x) => x + 1).join(" and ") + "]" : "") + ": " + c.facts.join("; ") + (c.dc ? " [Discogs: " + c.dc.have + " own it, " + c.dc.want + " want it]" : "")),
     "Rules:",
     "- Choose exactly 5 candidates, by number, from this list only. 5 different artists.",
+    many ? "- Balance the picks across the listener's records: include at least one candidate linked to each record (record 1, record 2" + (seeds.length > 2 ? ", record 3" : "") + "). Never take more than 2 picks linked only to the same record." : "",
+    pool.some((c) => c.sample) ? "- Candidates marked \"Sample source\" are the original records the listener's music samples: include at least one of them, and say which track samples it." : "",
+    digDepth > 0 ? "- This is a deeper dig: favour the most obscure candidates, the ones fewest people own." : "",
     "- Prefer the most rewarding discoveries: lesser-known albums over famous ones, proper studio albums over reissues.",
     pool.some((c) => c.dc) ? "- Where Discogs counts are given, prefer records few people own, especially ones more people want than own: those are the real deep cuts. Do not mention the counts in your text." : "",
     "- The connection you describe must come from the facts listed for that candidate. Do not add credits, samples, labels or places that are not listed. You may describe how the record sounds.",
@@ -941,7 +996,7 @@ function buildDataPrompt(seeds, mood, pool) {
       ? "- Order from strongest match to weakest. The first pick is the candidate that best sits in the common ground of all the records; its \"why\" mentions what links it to all of the records, and its \"thread\" is \"Common ground\"."
       : "- Order from strongest match to weakest.",
     WHY_STYLE + "\n  The link you mention must come from the facts listed for that candidate.",
-    "- \"thread\": 2 to 3 words naming the connection, e.g. \"Same producer\", \"Same label\", \"Band member\", \"Common ground\".",
+    "- \"thread\": 2 to 3 words naming the connection, e.g. \"Same producer\", \"Same label\", \"Band member\", \"Sample source\", \"Common ground\".",
     'Reply with only a JSON array: [{"id": number, "thread": string, "why": string}]'
   ].filter(Boolean).join("\n");
 }
@@ -994,7 +1049,11 @@ async function discogsRarity(list, max = 20) {
   if (ctl?.signal.aborted) throw { code: "cancelled" };
   return any;
 }
-const isMainstream = (c) => !!c.dc && (c.dc.many || c.dc.have > MAINSTREAM_HAVE);
+// Each "Dig deeper" round lowers the owner limit, so the rabbit hole gets rarer as you go.
+const DEPTH_LIMITS = [MAINSTREAM_HAVE, 3000, 1000, 400];
+let digDepth = 0;
+const ownerLimit = () => DEPTH_LIMITS[Math.min(digDepth, DEPTH_LIMITS.length - 1)];
+const isMainstream = (c) => !!c.dc && (c.dc.many || c.dc.have > ownerLimit());
 // Few owners, and more people wanting it than owning it: the digger's sweet spot.
 const rarityBonus = (c) => (!c.dc ? 0 : (c.dc.have < 1500 ? 1 : 0) + (c.dc.want > c.dc.have ? 1 : 0) - (c.dc.have > 4000 ? 1 : 0));
 // Leave out mainstream records when enough others remain.
@@ -1095,17 +1154,19 @@ function diggerLevel(st = diggerStats()) {
   return lv;
 }
 
-// Start a dig from the loved records a person worked on: their shared credit becomes the common ground.
-function digFromPerson(person) {
-  if ($("digBtn").disabled) return;
+// Start a new dig from one or more records ("More like this" in crates and on picks).
+function digFromRecords(recs) {
+  if ($("digBtn").disabled || !recs.length) return;
   $("modeRecords").checked = true; setDigMode();
-  const recs = person.recs.slice(0, MAX_SEEDS).map((r) => r.artist + " \u2013 " + r.album);
-  while (seeds().length < recs.length) addSeedField("");
-  seeds().forEach((inp, i) => { inp.value = recs[i] || ""; });
+  const list = recs.slice(0, MAX_SEEDS).map((r) => r.artist + " \u2013 " + r.album);
+  while (seeds().length < list.length) addSeedField("");
+  seeds().forEach((inp, i) => { inp.value = list[i] || ""; });
   $("digForm").scrollIntoView({ behavior: "smooth", block: "start" });
   const form = $("digForm");
   if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event("submit", { cancelable: true }));
 }
+// Start a dig from the loved records a person worked on: their shared credit becomes the common ground.
+function digFromPerson(person) { return digFromRecords(person.recs); }
 
 // ---------- Suggestions and corrections for the record fields ----------
 // While someone types, suggest real artists and albums from MusicBrainz. When they leave a field,
@@ -1311,6 +1372,7 @@ $("digForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   closeSuggest();
   const deeper = deeperNext && !!current; deeperNext = false;
+  digDepth = deeper ? (current.depth || 0) + 1 : 0;
   statusEl = deeper ? "deepStatus" : "status";
   $(deeper ? "status" : "deepStatus").textContent = "";
   // One mode at a time: records follow real links, a vibe is matched on its keywords.
@@ -1348,11 +1410,11 @@ $("digForm").addEventListener("submit", async (e) => {
       try {
         const { seeds: seedInfo, candidates } = await gatherCandidates(seedList, (msg) => setStatus(msg));
         let pool = rankCandidates(candidates, seedInfo, seedList);
-        if (pool.length >= 8) {
+        if (pool.length >= 5) {
           setStatus("Checking how rare each record is on Discogs\u2026");
-          if (await discogsRarity(pool, 20)) {
+          if (await discogsRarity(pool, 30)) {
             // Rare records first, among those with the strongest links.
-            pool = dropMainstream(pool, 8).map((c, i) => [c, i])
+            pool = dropMainstream(pool, 5).map((c, i) => [c, i])
               .sort((a, b) => (b[0].facts.length + rarityBonus(b[0])) - (a[0].facts.length + rarityBonus(a[0])) || a[1] - b[1]).map((x) => x[0]);
           }
           setStatus("Choosing the best five from " + pool.length + " real connections\u2026");
@@ -1382,7 +1444,22 @@ $("digForm").addEventListener("submit", async (e) => {
     if (!picks.length) throw { code: "invalid_json" };
     if (verify) {
       setStatus("Checking how rare each record is on Discogs\u2026");
-      if (await discogsRarity(picks, 10)) picks = dropMainstream(picks, 5);
+      if (await discogsRarity(picks, 10)) {
+        let rare = picks.filter((p) => !isMainstream(p));
+        if (rare.length < 5) {
+          // Too many well-known records: ask once more for deeper cuts, leaving out everything already suggested.
+          setStatus("Too many well-known records. Digging further down\u2026");
+          let more = [];
+          try { more = normalizePicks(await askClaude(buildPrompt(seedList, mood, 10, picks.map((p) => p.artist + " \u2013 " + p.album)) + "\nGo much further underground: no album that appears on best-of lists or that most record collectors already own.", { signal: ctl.signal })); }
+          catch (e2) { if (e2?.code !== "invalid_json") throw e2; }
+          more = more.filter((m) => !picks.some((p) => lc(p.artist) === lc(m.artist)));
+          await discogsRarity(more, 10);
+          rare = rare.concat(more.filter((p) => !isMainstream(p)));
+          // Still short: fill with the least-owned of the rest.
+          if (rare.length < 5) rare = rare.concat(picks.concat(more).filter((p) => isMainstream(p)).sort((a, b) => (a.dc?.have || 0) - (b.dc?.have || 0)));
+        }
+        picks = rare;
+      }
       checkReal.busy = 0;
       setStatus("Checking each record is a real album\u2026");
       let good = await checkReal(picks, (i, n) => { bar.style.width = (62 + i * (36 / n)) + "%"; });
@@ -1402,7 +1479,7 @@ $("digForm").addEventListener("submit", async (e) => {
     bar.style.width = "100%";
     if (limited()) countDig();
     const earlier = deeper ? current.picks || [] : [];
-    current = { picks: earlier.concat(picks), seeds: seedList, mood, date: new Date().toISOString() };
+    current = { picks: earlier.concat(picks), seeds: seedList, mood, depth: digDepth, date: new Date().toISOString() };
     store.set("dc-last", current);
     digHistory.unshift({ date: new Date().toISOString(), seeds: seedList, mood, picks });
     digHistory = digHistory.slice(0, 30);
@@ -1532,7 +1609,8 @@ function fillCrateDetail(panel, p) {
     linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
     linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
     linkEl("Bandcamp", "https://bandcamp.com/search?q=" + q(p)),
-    linkEl("Discogs", "https://www.discogs.com/search/?type=all&q=" + q(p))
+    linkEl("Discogs", "https://www.discogs.com/search/?type=all&q=" + q(p)),
+    linkEl("WhoSampled", "https://www.whosampled.com/search/?q=" + q(p))
   );
   const rm = document.createElement("button"); rm.type = "button"; rm.className = "chip"; rm.textContent = "Remove from crate";
   rm.onclick = () => {
@@ -1540,10 +1618,13 @@ function fillCrateDetail(panel, p) {
     document.querySelectorAll(".chip[data-r='loved']").forEach((c) => { if (c.dataset.k === p.k) c.setAttribute("aria-pressed", "false"); });
     renderCrate(); renderProfile(); renderHistory(); maybeAutoSummary();
   };
+  const more = document.createElement("button"); more.type = "button"; more.className = "chip"; more.textContent = "Dig from this record: 5 more";
+  more.onclick = () => digFromRecords([p]);
+  const row = document.createElement("div"); row.className = "react"; row.append(more, rm);
   panel.append(name);
   if (meta.textContent) panel.append(meta);
   if (why.textContent) panel.append(why);
-  panel.append(links, rm);
+  panel.append(links, row);
 }
 
 function renderHistory() {
@@ -1667,7 +1748,7 @@ function renderProfile() {
   vis.append(name, meterL); lt.append(sr, vis);
   const next = document.createElement("p"); next.className = "level-next";
   next.textContent = lv + 1 < LEVELS.length ? levelGap(LEVELS[lv + 1], st) + " to reach " + LEVELS[lv + 1].name + "." : "Top level. Nobody digs deeper.";
-  level.append(lt, next);
+  level.append(lt);
   box.append(level);
 
   const stats = document.createElement("div"); stats.className = "stats";
