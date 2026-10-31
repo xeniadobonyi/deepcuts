@@ -16,7 +16,7 @@ Everything runs on free tiers: Vercel Hobby for hosting and Groq's free API for 
 ## What works
 
 - Start a dig from up to three albums, songs or artists you love, or from a vibe (keywords, a mood or a moment)
-- Five picks, each with the connection to your taste and links to YouTube, Spotify, Apple Music, Bandcamp and Discogs
+- Five picks, each with the connection to your taste and links to YouTube, Spotify, Apple Music and Discogs
 - Suggestions and spelling corrections from MusicBrainz while typing records
 - Reactions (Loved it, Not for me), crates, past digs and a taste profile, saved in the visitor's browser
 
