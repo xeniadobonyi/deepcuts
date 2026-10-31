@@ -160,6 +160,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .mode-opt + .mode-opt span { border-left: 1px solid var(--fg); }
 .mode-opt input:checked + span { background: var(--fg); color: var(--bg); font-weight: 700; }
 .mode-opt input:focus-visible + span { outline: 2px solid var(--link); outline-offset: -4px; }
+.dig-deeper { align-self: flex-start; margin-top: 4px; }
 .react-note { font-size: 13px; color: var(--muted); align-self: center; }
 .crate-count { font-weight: 400; color: var(--muted); }
 .loved { display: flex; flex-direction: column; }
@@ -225,6 +226,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <span class="example-flag" id="exampleFlag">(example)</span>
     </div>
     <div class="crate" id="crate"></div>
+    <button type="button" class="btn ghost dig-deeper" id="digDeeper" hidden>Dig deeper: 5 more like this</button>
   </section>
 
   <section>
@@ -405,14 +407,19 @@ async function checkReal(list, step, want = 5) {
     if (ctl?.signal.aborted) throw { code: "cancelled" };
     step(i, list.length);
     const p = list[i];
+    // Only albums MusicBrainz confirms are kept. If the lookup can't answer (busy), ask once more, then leave it out.
     let info = { found: null };
-    try {
-      const r = await fetch("/api/cover?check=1&artist=" + encodeURIComponent(p.artist) + "&album=" + encodeURIComponent(p.album), { signal: ctl?.signal });
-      info = await r.json();
-    } catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; }
-    if (info.found !== false && !out.some((g) => g.artist.toLowerCase() === p.artist.toLowerCase())) {
+    for (let attempt = 0; attempt < 2 && info.found === null; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 1600));
+      try {
+        const r = await fetch("/api/cover?check=1&artist=" + encodeURIComponent(p.artist) + "&album=" + encodeURIComponent(p.album), { signal: ctl?.signal });
+        info = await r.json();
+        if (info.found === undefined) info.found = null;
+      } catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; info = { found: null }; }
+    }
+    if (info.found === true && !out.some((g) => g.artist.toLowerCase() === p.artist.toLowerCase())) {
       // Facts shown on the page come from MusicBrainz, not from the AI.
-      out.push({ ...p, artist: info.artist || p.artist, album: info.title || p.album, year: info.year || "", label: "", rgId: info.mbid || "", verified: info.found === true, cover: info.cover || "" });
+      out.push({ ...p, artist: info.artist || p.artist, album: info.title || p.album, year: info.year || "", label: "", rgId: info.mbid || "", verified: true, cover: info.cover || "" });
     }
     if (i < list.length - 1 && out.length < want) await new Promise((r) => setTimeout(r, 1100));
   }
@@ -493,6 +500,7 @@ function render(picks, isExample, fresh) {
   const crate = $("crate"); crate.replaceChildren();
   $("exampleFlag").hidden = !isExample;
   $("crateTitle").textContent = isExample ? "A sample dig" : "Your dig";
+  $("digDeeper").hidden = isExample || !(current && ((current.seeds || []).length || current.mood));
   picks.forEach((p) => {
     const el = document.createElement("article"); el.className = "pick" + (fresh ? " fresh" : "");
     const top = document.createElement("div"); top.className = "pick-top";
@@ -940,6 +948,23 @@ $("digForm").addEventListener("submit", async (e) => {
   }
 });
 $("stopBtn").onclick = () => ctl?.abort();
+
+// "Dig deeper": run the same search again. Records already shown are never repeated, so it brings five new ones.
+$("digDeeper").onclick = () => {
+  if (!current || $("digBtn").disabled) return;
+  const list = (current.seeds || []).slice(0, MAX_SEEDS);
+  const vibe = !list.length && !!current.mood;
+  $(vibe ? "modeVibe" : "modeRecords").checked = true;
+  setDigMode();
+  if (vibe) $("mood").value = current.mood;
+  else {
+    while (seeds().length < list.length) addSeedField("");
+    seeds().forEach((inp, i) => { inp.value = list[i] || ""; });
+  }
+  $("digForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  const form = $("digForm");
+  if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event("submit", { cancelable: true }));
+};
 
 // Initial state
 const saved = store.get("dc-form", null);

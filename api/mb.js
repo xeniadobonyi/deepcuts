@@ -20,7 +20,10 @@ module.exports = async function handler(req, res) {
 
   let r;
   try {
-    r = await fetch(`https://musicbrainz.org/ws/2/${entity}?${qs}`, { headers: { "user-agent": UA, accept: "application/json" } });
+    const ask = () => fetch(`https://musicbrainz.org/ws/2/${entity}?${qs}`, { headers: { "user-agent": UA, accept: "application/json" } });
+    r = await ask();
+    // MusicBrainz allows about one request a second; when busy, wait and try once more.
+    if (r.status === 503 || r.status === 429) { await new Promise((ok) => setTimeout(ok, 1200)); r = await ask(); }
   } catch {
     res.statusCode = 503; return res.end("lookup unavailable");
   }

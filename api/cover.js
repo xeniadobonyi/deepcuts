@@ -25,9 +25,12 @@ module.exports = async function handler(req, res) {
   let groups = [];
   try {
     const q = `releasegroup:"${album}" AND artist:"${artist}"`;
-    const r = await fetch("https://musicbrainz.org/ws/2/release-group/?fmt=json&limit=5&query=" + encodeURIComponent(q), {
+    const ask = () => fetch("https://musicbrainz.org/ws/2/release-group/?fmt=json&limit=5&query=" + encodeURIComponent(q), {
       headers: { "user-agent": UA, accept: "application/json" },
     });
+    let r = await ask();
+    // MusicBrainz allows about one request a second; when busy, wait and try once more.
+    if (r.status === 503 || r.status === 429) { await new Promise((ok) => setTimeout(ok, 1200)); r = await ask(); }
     if (!r.ok) return reply(503, { found: null, cover: null }); // not cached: try again later
     groups = (await r.json())["release-groups"] || [];
   } catch {
