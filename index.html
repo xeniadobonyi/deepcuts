@@ -930,7 +930,7 @@ $("digForm").addEventListener("submit", async (e) => {
     }
     bar.style.width = "100%";
     if (limited()) countDig();
-    current = { picks, seeds: seedList, mood };
+    current = { picks, seeds: seedList, mood, date: new Date().toISOString() };
     store.set("dc-last", current);
     digHistory.unshift({ date: new Date().toISOString(), seeds: seedList, mood, picks });
     digHistory = digHistory.slice(0, 30);
@@ -960,9 +960,15 @@ $("stopBtn").onclick = () => ctl?.abort();
 
 // Initial state
 const saved = store.get("dc-form", null);
-if (saved) { (saved.seeds || []).filter(Boolean).slice(0, MAX_SEEDS).forEach((v, i) => { if (i === 0) seeds()[0].value = v; else addSeedField(v); }); $("mood").value = saved.mood || ""; if (saved.mode === "vibe") $("modeVibe").checked = true; }
+// After a reload the form starts empty, ready for a new dig; only the chosen mode is remembered.
+if (saved?.mode === "vibe") $("modeVibe").checked = true;
 setDigMode();
-if (current?.picks?.length) { render(current.picks, false, false); $("digBtn").textContent = "Dig again"; }
+const shortDate = (iso) => { try { return iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : ""; } catch { return ""; } };
+if (current?.picks?.length) {
+  render(current.picks, false, false);
+  const when = shortDate(current.date || digHistory[0]?.date);
+  $("crateTitle").textContent = "Your last dig" + (when ? " \u00b7 " + when : "");
+}
 else render(EXAMPLE.picks, true, false);
 renderHistory();
 renderProfile();
@@ -1069,7 +1075,11 @@ function renderHistory() {
       ul.append(li);
     });
     const open = document.createElement("button"); open.type = "button"; open.className = "btn ghost open-dig"; open.textContent = "Show this dig above";
-    open.onclick = () => { current = { picks: d.picks, seeds: d.seeds }; render(d.picks, false, false); $("crateTitle").scrollIntoView({ behavior: "smooth", block: "start" }); };
+    open.onclick = () => {
+      current = { picks: d.picks, seeds: d.seeds, mood: d.mood, date: d.date }; render(d.picks, false, false);
+      const when = shortDate(d.date); $("crateTitle").textContent = "Dig from " + (when || "earlier");
+      $("crateTitle").scrollIntoView({ behavior: "smooth", block: "start" });
+    };
     det.append(sum, ul, open);
     if (i === 0) det.open = false;
     box.append(det);
