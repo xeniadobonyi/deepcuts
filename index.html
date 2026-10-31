@@ -926,24 +926,6 @@ async function gatherCandidates(seedList, onStep) {
       }
     }
 
-    // The label's catalogue: same era first, then deeper into the back catalogue
-    if (seed.label) {
-      onStep("Browsing the " + seed.label.name + " catalogue…");
-      const pages = [0].concat(spare() ? [100] : []);
-      for (const offset of pages) {
-        const lr = await mbc("release", { label: seed.label.id, inc: "artist-credits+release-groups", limit: 100, offset });
-        for (const r of (lr?.releases || [])) {
-          const g = r["release-group"];
-          if (!g?.id || (g["primary-type"] && g["primary-type"] !== "Album") || (g["secondary-types"] || []).length) continue;
-          const y = yearOf(r.date || g["first-release-date"]);
-          if (seed.year && y && Math.abs(+y - +seed.year) > 10) continue;
-          add({ artist: creditName(r["artist-credit"]), album: g.title, year: y, label: seed.label.name, rgId: g.id },
-            `Released on ${seed.label.name}, the same label as ${seedName}`);
-        }
-        if ((lr?.releases || []).length < 100) break;
-      }
-    }
-
     // The people on the record: their own albums
     for (const pr of people) {
       if (!spare()) break;
@@ -969,6 +951,26 @@ async function gatherCandidates(seedList, onStep) {
       }
     }
 
+    // The label's catalogue, nearest years first. A label is a looser link than the people on a record,
+    // so it comes after them and adds only a few albums (fewer still for big labels with huge catalogues).
+    if (seed.label && spare()) {
+      onStep("Browsing the " + seed.label.name + " catalogue\u2026");
+      const lr = await mbc("release", { label: seed.label.id, inc: "artist-credits+release-groups", limit: 100 });
+      const rows = [];
+      for (const r of (lr?.releases || [])) {
+        const g = r["release-group"];
+        if (!g?.id || (g["primary-type"] && g["primary-type"] !== "Album") || (g["secondary-types"] || []).length) continue;
+        const y = yearOf(r.date || g["first-release-date"]);
+        if (seed.year && y && Math.abs(+y - +seed.year) > 10) continue;
+        rows.push({ artist: creditName(r["artist-credit"]), album: g.title, year: y, label: seed.label.name, rgId: g.id });
+      }
+      const big = (lr?.["release-count"] || 0) > 300;
+      rows.sort((a, b) => Math.abs(+a.year - +seed.year || 0) - Math.abs(+b.year - +seed.year || 0))
+        .filter((x, i, a) => a.findIndex((y) => lc(y.artist) === lc(x.artist)) === i)
+        .slice(0, big ? 4 : 8)
+        .forEach((x) => add(x, `Released on ${seed.label.name}, the same label as ${seedName}`));
+    }
+
     // Sister labels (imprints and parent labels) from the same era
     if (seed.label && spare()) {
       const lab = await mbc("label/" + seed.label.id, { inc: "label-rels" });
@@ -990,16 +992,25 @@ async function gatherCandidates(seedList, onStep) {
   return { seeds, candidates: [...cands.values()] };
 }
 
+// The kind of link behind a fact, so no single kind (like one big label) can fill a whole dig.
+const linkKind = (fact) => /^Sample source/.test(fact) ? "sample" : /label/i.test(fact) && /^Released on/.test(fact) ? "label"
+  : /is credited on/.test(fact) ? "credit" : /side project/i.test(fact) ? "side" : /is linked to/.test(fact) ? "member" : "other";
+const kindOf = (c) => linkKind((c.facts || [])[0] || "");
+// The specific link: one label, one credited person, one band member. Capped at 2 picks each.
+const linkOf = (c) => { const f = (c.facts || [])[0] || ""; return kindOf(c) + ":" + (f.match(/^Released on (.+?), /)?.[1] || f.split(" is ")[0] || f); };
 // Keep new artists only, put candidates linked to several records first, and keep the list varied.
 function rankCandidates(candidates, seeds, seedList) {
   const seedArtists = new Set(seeds.map((x) => lc(x.artist)).concat(seedList.map((x) => lc(splitSeed(x).artist))));
   const seen = new Set([...digHistory.flatMap((d) => d.picks.map(keyOf)), ...Object.keys(reactions)]);
   const perArtist = {};
-  const score = (c) => c.facts.length + (c.sample ? 3 : 0) + 2 * ((c.from || []).length - 1);
+  const score = (c) => c.facts.length + (c.sample ? 3 : 0) + 2 * ((c.from || []).length - 1) - (c.facts.every((f) => linkKind(f) === "label") ? 0.5 : 0);
   const ranked = candidates
     .filter((c) => (c.rgId || c.dcId) && c.artist && !seedArtists.has(lc(c.artist)) && !seen.has(keyOf(c)) && !/various artists/i.test(c.artist))
     .sort((a, b) => score(b) - score(a))
     .filter((c) => { const k = lc(c.artist); perArtist[k] = (perArtist[k] || 0) + 1; return perArtist[k] <= 2; });
+  // At most 10 candidates per kind of link, so labels can't crowd out credits, members and samples.
+  const perKind = {};
+  ranked.splice(0, ranked.length, ...ranked.filter((c) => { const k = linkOf(c); perKind[k] = (perKind[k] || 0) + 1; return perKind[k] <= 10; }));
   // With several records, take turns between them so each record gets its share of the best candidates.
   if (seedList.length < 2) return ranked.slice(0, 45);
   const lanes = seedList.map((_, i) => ranked.filter((c) => (c.from || [0])[0] === i));
@@ -1029,6 +1040,7 @@ function buildDataPrompt(seeds, mood, pool) {
     pool.some((c) => c.sample) ? "- Candidates marked \"Sample source\" are the original records the listener's music samples: include at least one of them, and say which track samples it." : "",
     digDepth > 0 ? "- This is a deeper dig: favour the most obscure candidates, the ones fewest people own." : "",
     "- Prefer the most rewarding discoveries and proper studio albums over reissues.",
+    "- Vary the connections: no more than 2 picks through the same link (the same label, or the same person). Musicians, producers, samples and band members make stronger links than a shared label.",
     pool.some((c) => tierOf(c)) ? "- Do not mention the Discogs counts or the kind in your text." : "- Favour lesser-known albums over famous ones.",
     "- The connection you describe must come from the facts listed for that candidate. Do not add credits, samples, labels or places that are not listed. You may describe how the record sounds.",
     many
@@ -1055,7 +1067,7 @@ function pickFromPool(res, pool, max = 5) {
       artist: c.artist, album: c.album, year: c.year || "", label: c.label || "",
       thread: String(o.thread || "").trim(), why: String(o.why || o.reason || "").trim(),
       rgId: c.rgId || "", cover: c.rgId ? "https://coverartarchive.org/release-group/" + c.rgId + "/front-250" : "",
-      verified: c.rgId || c.dcId ? true : null,
+      verified: c.rgId || c.dcId ? true : null, facts: c.facts,
       dc: c.dc || (c.dcId ? { url: "https://www.discogs.com/release/" + c.dcId, have: 0, want: 0, at: 0 } : null)
     });
     if (out.length === max) break;
@@ -1100,8 +1112,11 @@ const mixNow = () => MIXES[Math.min(digDepth, MIXES.length - 1)];
 // deeper kinds first. The rest follow as backups (used if a record can't be confirmed).
 function selectMix(list, n = 5) {
   const mix = mixNow(), chosen = [];
-  for (const t of ["essential", "favourite", "deep"]) chosen.push(...list.filter((c) => tierOf(c) === t).slice(0, mix[t]));
-  for (const t of ["deep", "favourite", "", "essential"]) for (const c of list) { if (chosen.length >= n) break; if (tierOf(c) === t && !chosen.includes(c)) chosen.push(c); }
+  // No more than 2 picks from the same kind of link (same label, credits, band members…), unless nothing else is left.
+  const linkCount = (k) => chosen.filter((c) => c.facts && linkOf(c) === k).length;
+  const fits = (c) => !c.facts || linkCount(linkOf(c)) < 2;
+  for (const t of ["essential", "favourite", "deep"]) for (const c of list) { if (chosen.filter((x) => tierOf(x) === t).length >= mix[t]) break; if (tierOf(c) === t && fits(c)) chosen.push(c); }
+  for (const strict of [true, false]) for (const t of ["deep", "favourite", "", "essential"]) for (const c of list) { if (chosen.length >= n) break; if (tierOf(c) === t && !chosen.includes(c) && (!strict || fits(c))) chosen.push(c); }
   chosen.sort((a, b) => TIER_ORDER.indexOf(tierOf(a)) - TIER_ORDER.indexOf(tierOf(b))); // familiar first, then down the rabbit hole
   return chosen.concat(list.filter((c) => !chosen.includes(c)));
 }
