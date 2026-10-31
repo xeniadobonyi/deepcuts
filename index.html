@@ -65,6 +65,11 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .btn:disabled { opacity: .4; cursor: default; background: transparent; color: var(--fg); }
 .btn.ghost { border: 0; padding: 0; font-weight: 400; text-decoration: underline; }
 .btn.ghost:hover { background: transparent; color: var(--fg); }
+.progress { position: relative; height: 3px; background: var(--rule); overflow: hidden; }
+.progress .bar { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--fg); transition: width .4s ease; }
+.progress.waiting .bar { width: 30%; animation: sweep 1.4s ease-in-out infinite; }
+@keyframes sweep { from { left: -30%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .progress.waiting .bar { animation: none; left: 0; } .progress .bar { transition: none; } }
 .status { font-size: 13px; color: var(--muted); min-height: 1.4em; }
 .status.err { color: var(--fg); }
 
@@ -154,6 +159,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <button class="btn" type="submit" id="digBtn">Dig for five</button>
       <button class="btn ghost" type="button" id="stopBtn" hidden>Stop</button>
     </div>
+    <div class="progress" id="progress" hidden role="progressbar" aria-label="Dig progress" aria-valuemin="0" aria-valuemax="5"><div class="bar" id="progressBar"></div></div>
     <div class="status" id="status" role="status" aria-live="polite"></div>
   </form>
 
@@ -348,8 +354,22 @@ $("digForm").addEventListener("submit", async (e) => {
   ctl = new AbortController();
   $("digBtn").disabled = true; $("stopBtn").hidden = false;
   setStatus("Digging through the crates… this can take up to a minute.");
+  const prog = $("progress"), bar = $("progressBar");
+  let found = 0;
+  prog.hidden = false; prog.classList.add("waiting"); bar.style.width = ""; prog.removeAttribute("aria-valuenow");
+  const onText = ({ text }) => {
+    const n = Math.min(5, (text.match(/"why"\s*:\s*"(?:[^"\\]|\\.)*"/g) || []).length);
+    if (prog.classList.contains("waiting")) { prog.classList.remove("waiting"); bar.style.width = "8%"; setStatus("Found the first lead…"); }
+    if (n > found) {
+      found = n;
+      bar.style.width = (8 + n * 18.4) + "%";
+      prog.setAttribute("aria-valuenow", String(n));
+      setStatus(n + " of 5 records dug…");
+    }
+  };
   try {
-    const res = await sample.json(buildPrompt(seedList, mood), { signal: ctl.signal, cache: false });
+    const res = await sample.json(buildPrompt(seedList, mood), { signal: ctl.signal, cache: false, onText });
+    bar.style.width = "100%";
     const picks = (Array.isArray(res) ? res : []).filter((p) => p && p.artist && p.album).slice(0, 5)
       .map((p) => ({ artist: String(p.artist), album: String(p.album), year: p.year ? String(p.year) : "", label: p.label ? String(p.label) : "", thread: p.thread ? String(p.thread) : "", why: p.why ? String(p.why) : "" }));
     if (!picks.length) throw { code: "invalid_json" };
@@ -368,6 +388,7 @@ $("digForm").addEventListener("submit", async (e) => {
     else setStatus(ERR[err?.code] || "Something went wrong reaching Claude. Press Dig to try again.", true);
   } finally {
     $("digBtn").disabled = false; $("stopBtn").hidden = true;
+    setTimeout(() => { $("progress").hidden = true; $("progress").classList.remove("waiting"); $("progressBar").style.width = "0"; }, 450);
   }
 });
 $("stopBtn").onclick = () => ctl?.abort();
