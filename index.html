@@ -168,6 +168,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .mode-opt input:checked + span { background: var(--fg); color: var(--bg); font-weight: 700; }
 .mode-opt input:focus-visible + span { outline: 2px solid var(--link); outline-offset: -4px; }
 .dig-deeper { align-self: flex-start; margin-top: 4px; }
+.more-head { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--fg); font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .suggest { list-style: none; margin: -4px 0 0; padding: 0; border: 1px solid var(--fg); border-radius: 3px; background: var(--surface); max-height: 300px; overflow-y: auto; }
 .suggest-head { padding: 6px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--rule); }
 .suggest-opt { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 12px; padding: 10px 12px; min-height: 44px; box-sizing: border-box; cursor: pointer; font-size: 15px; }
@@ -239,6 +240,8 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     </div>
     <div class="crate" id="crate"></div>
     <button type="button" class="btn ghost dig-deeper" id="digDeeper" hidden>Dig deeper: 5 more like this</button>
+    <div class="progress" id="deepProgress" hidden role="progressbar" aria-label="Dig deeper progress" aria-valuemin="0" aria-valuemax="5"><div class="bar" id="deepBar"></div></div>
+    <div class="status" id="deepStatus" role="status" aria-live="polite"></div>
   </section>
 
   <section>
@@ -286,18 +289,12 @@ const EXAMPLE = {
 
 const $ = (id) => document.getElementById(id);
 const MAX_SEEDS = 3;
-const SEED_POOL = [
-  "A Tribe Called Quest – The Low End Theory",
-  "Wire – Pink Flag",
-  "Ariel Pink's Haunted Graffiti – Before Today",
-  "Bobbi Humphrey – Blacks and Blues",
-  "Daft Punk – Discovery",
-  "Curtis Mayfield – Curtis",
-  "Minnie Riperton – Come to My Garden",
-  "Labi Siffre – Crying Laughing Loving Lying",
-  "MC Solaar – Prose Combat"
+// Shown as placeholders in the three record fields, in this order.
+const SEED_EXAMPLES = [
+  "Bill Evans – Sunday at the Village Vanguard",
+  "Labi Siffre – Happy",
+  "The Beach Boys – Sunflower"
 ];
-const SEED_EXAMPLES = SEED_POOL.map((s) => [Math.random(), "e.g. " + s]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
 document.getElementById("seed1").placeholder = SEED_EXAMPLES[0];
 const seeds = () => [...document.querySelectorAll("#seedList input")];
 function addSeedField(value, focus) {
@@ -516,8 +513,13 @@ function linkEl(text, href) {
   const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; a.textContent = text; return a;
 }
 
-function render(picks, isExample, fresh) {
-  const crate = $("crate"); crate.replaceChildren();
+function render(picks, isExample, fresh, append) {
+  const crate = $("crate");
+  let firstNew = null;
+  if (append) {
+    firstNew = document.createElement("p"); firstNew.className = "more-head"; firstNew.textContent = picks.length + " more like this";
+    crate.append(firstNew);
+  } else crate.replaceChildren();
   $("exampleFlag").hidden = !isExample;
   $("crateTitle").textContent = isExample ? "A sample dig" : "Your dig";
   $("digDeeper").hidden = isExample || !(current && ((current.seeds || []).length || current.mood));
@@ -601,9 +603,13 @@ function render(picks, isExample, fresh) {
     el.append(sleeve, body);
     crate.append(el);
   });
+  // Bring the new picks into view, just below the earlier ones.
+  if (firstNew) try { firstNew.scrollIntoView({ behavior: "smooth", block: "start" }); } catch {}
 }
 
-function setStatus(msg, err) { const s = $("status"); s.textContent = msg; s.classList.toggle("err", !!err); }
+let statusEl = "status"; // "Dig deeper" reports below the results instead of in the form
+let deeperNext = false;
+function setStatus(msg, err) { const s = $(statusEl); s.textContent = msg; s.classList.toggle("err", !!err); }
 
 // How every "why this record" should read: like a friend in a record shop, music first, no formula.
 const WHY_STYLE = [
@@ -1188,6 +1194,9 @@ if (API_URL) {
 $("digForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   closeSuggest();
+  const deeper = deeperNext && !!current; deeperNext = false;
+  statusEl = deeper ? "deepStatus" : "status";
+  $(deeper ? "status" : "deepStatus").textContent = "";
   // One mode at a time: records follow real links, a vibe is matched on its keywords.
   const vibeMode = digMode() === "vibe";
   const seedList = vibeMode ? [] : seeds().map((s) => s.value.trim()).filter(Boolean).slice(0, MAX_SEEDS);
@@ -1200,7 +1209,8 @@ $("digForm").addEventListener("submit", async (e) => {
   ctl = new AbortController();
   $("digBtn").disabled = true; $("stopBtn").hidden = false;
   setStatus("Digging through the crates… this can take up to a minute.");
-  const prog = $("progress"), bar = $("progressBar");
+  const prog = $(deeper ? "deepProgress" : "progress"), bar = $(deeper ? "deepBar" : "progressBar");
+  if (deeper) { $("digDeeper").disabled = true; $("digDeeper").textContent = "Digging deeper\u2026"; }
   let found = 0, target = 5, dropped = 0;
   prog.hidden = false; prog.classList.add("waiting"); bar.style.width = ""; prog.removeAttribute("aria-valuenow");
   const onText = ({ text }) => {
@@ -1275,14 +1285,15 @@ $("digForm").addEventListener("submit", async (e) => {
     }
     bar.style.width = "100%";
     if (limited()) countDig();
-    current = { picks, seeds: seedList, mood, date: new Date().toISOString() };
+    const earlier = deeper ? current.picks || [] : [];
+    current = { picks: earlier.concat(picks), seeds: seedList, mood, date: new Date().toISOString() };
     store.set("dc-last", current);
     digHistory.unshift({ date: new Date().toISOString(), seeds: seedList, mood, picks });
     digHistory = digHistory.slice(0, 30);
     store.set("dc-history", digHistory);
     renderHistory();
     renderProfile();
-    render(picks, false, true);
+    render(picks, false, true, deeper);
     setStatus((fromData ? picks.length + " real records, each found through MusicBrainz credits and labels. "
       : dropped ? "Only " + picks.length + " records could be confirmed as real albums, so that\u2019s all this dig shows. "
       : verify ? "Five real records dug, each checked on MusicBrainz. " : "Five records dug. ") + digsLeftNote());
@@ -1297,7 +1308,9 @@ $("digForm").addEventListener("submit", async (e) => {
     }
   } finally {
     $("digBtn").disabled = false; $("stopBtn").hidden = true;
-    setTimeout(() => { $("progress").hidden = true; $("progress").classList.remove("waiting"); $("progressBar").style.width = "0"; }, 450);
+    $("digDeeper").disabled = false; $("digDeeper").textContent = "Dig deeper: 5 more like this";
+    statusEl = "status";
+    setTimeout(() => { prog.hidden = true; prog.classList.remove("waiting"); bar.style.width = "0"; }, 450);
   }
 });
 $("stopBtn").onclick = () => ctl?.abort();
@@ -1314,7 +1327,7 @@ $("digDeeper").onclick = () => {
     while (seeds().length < list.length) addSeedField("");
     seeds().forEach((inp, i) => { inp.value = list[i] || ""; });
   }
-  $("digForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  deeperNext = true; // new picks go below the current ones, with the progress bar under them
   const form = $("digForm");
   if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event("submit", { cancelable: true }));
 };
@@ -1325,6 +1338,7 @@ const saved = store.get("dc-form", null);
 // (Set it explicitly, because some browsers restore the last radio choice on reload.)
 $("modeRecords").checked = true;
 setDigMode();
+while (seeds().length < MAX_SEEDS) addSeedField(""); // all three fields, each with its example
 const shortDate = (iso) => { try { return iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : ""; } catch { return ""; } };
 if (current?.picks?.length) {
   render(current.picks, false, false);
