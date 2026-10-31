@@ -565,8 +565,7 @@ function render(picks, isExample, fresh, append) {
       linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
       linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
       linkEl("Bandcamp", "https://bandcamp.com/search?q=" + q(p)),
-      linkEl("Discogs", p.dc?.url || "https://www.discogs.com/search/?type=all&q=" + q(p)),
-      linkEl("WhoSampled", "https://www.whosampled.com/search/?q=" + q(p))
+      linkEl("Discogs", p.dc?.url || "https://www.discogs.com/search/?type=all&q=" + q(p))
     );
     let rarity = null;
     if (dcFresh(p.dc)) {
@@ -1720,8 +1719,7 @@ function fillCrateDetail(panel, p) {
     linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
     linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
     linkEl("Bandcamp", "https://bandcamp.com/search?q=" + q(p)),
-    linkEl("Discogs", "https://www.discogs.com/search/?type=all&q=" + q(p)),
-    linkEl("WhoSampled", "https://www.whosampled.com/search/?q=" + q(p))
+    linkEl("Discogs", "https://www.discogs.com/search/?type=all&q=" + q(p))
   );
   const rm = document.createElement("button"); rm.type = "button"; rm.className = "chip"; rm.textContent = "Remove from crate";
   rm.onclick = () => {
