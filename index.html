@@ -294,6 +294,10 @@ if (!Array.isArray(digHistory)) digHistory = [];
 if (!digHistory.length && current?.picks?.length) digHistory = [{ date: null, seeds: current.seeds || [], picks: current.picks }];
 let sample = null;
 let ctl = null;
+// Page state used by functions that run during the first render, so it is declared before any of them.
+let summarizing = false, summaryTimer = null, profileNote = "";
+const CRATE_SIZE = 10;
+let openCrateRecord = null;
 
 // Where live digs come from: Claude inside claude.ai, or the Deep Cuts server at /api/dig when the site runs on Vercel.
 // A browser-saved API key is an owner-only test path, shown only at #connect.
@@ -913,8 +917,6 @@ renderProfile();
 renderCrate();
 
 // Loved records fill crates of 10, oldest first. A new crate starts when one is full.
-const CRATE_SIZE = 10;
-let openCrateRecord = null;
 function renderCrate() {
   const box = $("loved"); box.replaceChildren();
   const idx = pickIndex();
@@ -1034,7 +1036,6 @@ function tally(list, fn) {
   return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => n > 1 ? k + " (" + n + ")" : k).join(", ");
 }
 
-let summarizing = false, summaryTimer = null, profileNote = "";
 
 async function writeSummary(manual) {
   if (summarizing) return;
