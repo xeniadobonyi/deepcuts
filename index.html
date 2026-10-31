@@ -250,7 +250,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="past" id="past"></div>
   </section>
 
-  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice. Picks and details are AI-generated from music knowledge, so check credits on Discogs before quoting them. Album data from MusicBrainz. Covers from the Cover Art Archive. Owner counts from Discogs: this site uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. “Discogs” is a trademark of Zink Media, LLC.</p>
+  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice. Picks and details are AI-generated from music knowledge, so check credits on Discogs before quoting them. Album data from MusicBrainz. Covers from the Cover Art Archive. <a href="https://www.discogs.com" target="_blank" rel="noopener">Data provided by Discogs.</a> This site uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. “Discogs” is a trademark of Zink Media, LLC.</p>
 </div>
 
 <script>
@@ -540,7 +540,7 @@ function render(picks, isExample, fresh) {
     let rarity = null;
     if (dcFresh(p.dc)) {
       rarity = document.createElement("p"); rarity.className = "rarity";
-      rarity.append(count(p.dc.have) + (p.dc.many ? "+" : "") + " own it \u00b7 " + count(p.dc.want) + " want it. ", linkEl("Data provided by Discogs.", p.dc.url));
+      rarity.textContent = count(p.dc.have) + (p.dc.many ? "+" : "") + " own it \u00b7 " + count(p.dc.want) + " want it";
     }
     const react = document.createElement("div"); react.className = "react";
     const k = keyOf(p);
