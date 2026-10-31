@@ -9,6 +9,7 @@ Deep Cuts learns your taste and digs for you: five records you probably haven't 
 - `api/mb.js`: read-only MusicBrainz lookups (cached), used to find candidates through real links: the same label in the same years, the producers and engineers on a record, and related artists. The AI then chooses among those candidates and explains the picks.
 - `api/discogs.js`: asks Discogs how many members own and want each candidate album. Records almost everyone owns are left out and rare, sought-after ones come first. Optional: it runs only when `DISCOGS_TOKEN` is set.
 - Discogs is also the backup when MusicBrainz doesn't know a record yet (new and underground releases): suggestions, and digs from the record's label and credited people.
+- Vibe digs search Discogs by genre, style, country and years (worked out by the AI from the words), so the AI chooses among real records instead of recalling them.
 - `api/dig.js`: a small Vercel Function that sends each dig to Groq's free AI API and streams the answer back. The key stays on the server; visitors never see it or need an account.
 
 Everything runs on free tiers: Vercel Hobby for hosting and Groq's free API for the AI. Groq's free allowance is shared by all visitors, so on a very busy day digs may pause until the next day.

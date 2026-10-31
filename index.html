@@ -472,7 +472,7 @@ function queueCover(sleeve, p) {
     img.src = p.cover;
     return;
   }
-  if (!API_URL || p.verified === true) return;
+  if (!API_URL || (p.verified === true && !(p.dcId && !p.rgId))) return;
   coverQueue.push([sleeve, p]);
   pumpCovers();
 }
@@ -485,7 +485,7 @@ function pumpCovers() {
     .then((r) => r.json())
     .then((info) => {
       if (!sleeve.isConnected) return;
-      if (info.found === false) {
+      if (info.found === false && !p.dcId) {
         // The album isn't on MusicBrainz: the AI may have invented it. Say so plainly.
         const card = sleeve.closest(".pick");
         const top = card?.querySelector(".pick-top");
@@ -1065,7 +1065,7 @@ function pickFromPool(res, pool, max = 5) {
       artist: c.artist, album: c.album, year: c.year || "", label: c.label || "",
       thread: String(o.thread || "").trim(), why: String(o.why || o.reason || "").trim(),
       rgId: c.rgId || "", cover: c.rgId ? "https://coverartarchive.org/release-group/" + c.rgId + "/front-250" : "",
-      verified: c.rgId || c.dcId ? true : null, facts: c.facts,
+      verified: c.rgId || c.dcId ? true : null, facts: c.facts, dcId: c.dcId || "",
       dc: c.dc || (c.dcId ? { url: "https://www.discogs.com/release/" + c.dcId, have: 0, want: 0, at: 0 } : null)
     });
     if (out.length === max) break;
@@ -1137,6 +1137,76 @@ async function discogsAsk(params) {
   } catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; return null; }
 }
 let seedFacts = []; // what's known about the listener's records, also given to the AI when it digs on its own
+
+// ---------- Vibe digs from real Discogs records ----------
+// The AI turns the vibe into Discogs searches (genre, style, country, years). Discogs returns real albums with
+// their owner counts, and the AI then only chooses among them and explains, like a dig from records.
+const DISCOGS_GENRES = ["Blues", "Brass & Military", "Children's", "Classical", "Electronic", "Folk, World, & Country", "Funk / Soul", "Hip Hop", "Jazz", "Latin", "Non-Music", "Pop", "Reggae", "Rock", "Stage & Screen"];
+function vibePlanPrompt(mood) {
+  return [
+    "Turn a music search into Discogs database searches.",
+    "Search: \"" + mood + "\"",
+    "Discogs genres (use exactly one of these per search): " + DISCOGS_GENRES.join("; "),
+    "Give 2 or 3 searches that together cover the search well, from different angles (for example a main style and a neighbouring one).",
+    "- style: one real Discogs style, spelled as on Discogs (for example Soft Rock, Deep House, Bossa Nova, Italo-Disco, Synth-pop, Psychedelic Rock, Afrobeat, Soul-Jazz). Use \"\" if unsure.",
+    "- country: the country as Discogs names it (for example US, UK, France, Japan, Brazil), or \"\" if the search names no place.",
+    "- from and to: the years the search implies (\"70s\" means 1970 to 1979), or null if it implies none.",
+    'Reply with only JSON: {"searches": [{"genre": string, "style": string, "country": string, "from": number|null, "to": number|null}]}'
+  ].join("\n");
+}
+function buildVibeDataPrompt(mood, pool) {
+  return [
+    "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
+    "The listener searched for: \"" + mood + "\". This search is the brief: every pick must clearly match all of its words.",
+    "Candidate albums, real records found on Discogs:",
+    ...pool.map((c, i) => (i + 1) + ". " + c.artist + " \u2013 " + c.album + (c.year ? " (" + c.year + ")" : "") + ": " + c.facts.join("; ") + (tierOf(c) ? " [" + TIER_NAMES[tierOf(c)] + ": " + c.dc.have + " own it, " + c.dc.want + " want it on Discogs]" : "")),
+    "Rules:",
+    "- Choose 8 candidates, by number, from this list only, ranked best first. 8 different artists.",
+    "- The listener gets a mix of kinds: " + Object.entries(mixNow()).filter(([, n]) => n).map(([t, n]) => n + " " + TIER_NAMES[t]).join(", ") + ". Among your 8, include at least that many of each kind where the list has them. Within each kind, choose the most accomplished records: the ones critics and collectors rate highest.",
+    digDepth > 0 ? "- This is a deeper dig: favour the most obscure candidates that still fit perfectly." : "",
+    "- Only choose records you are confident truly match the search. Skip candidates that only match it loosely.",
+    "- Do not mention the Discogs counts or the kind in your text. Only state facts you are sure of; you may describe how a record sounds.",
+    WHY_STYLE + "\n  Say how it fits the search (\"" + mood + "\") along the way.",
+    "- \"thread\": 2 to 4 words naming how it matches the search, e.g. \"Laurel Canyon, 1972\", \"West Coast soft rock\".",
+    'Reply with only a JSON array: [{"id": number, "thread": string, "why": string}]'
+  ].filter(Boolean).join("\n");
+}
+async function vibeFromDiscogs(mood, onText) {
+  setStatus("Working out where to look on Discogs\u2026");
+  let plan = null;
+  try { plan = await askClaude(vibePlanPrompt(mood), { signal: ctl.signal }); }
+  catch (e) { if (e?.code === "cancelled") throw e; return []; }
+  const list = Array.isArray(plan) ? plan : (plan?.searches || Object.values(plan || {}).find(Array.isArray) || []);
+  const searches = list.filter((x) => x && (x.genre || x.style)).slice(0, 3);
+  if (!searches.length) return [];
+  const all = new Map();
+  for (const sch of searches) {
+    const yrs = sch.from ? (sch.to && sch.to !== sch.from ? sch.from + "\u2013" + sch.to : String(sch.from)) : "";
+    setStatus("Searching Discogs: " + [sch.style || sch.genre, sch.country, yrs].filter(Boolean).join(", ") + "\u2026");
+    const ask = (style) => discogsAsk({ vibe: "1", genre: sch.genre || "", style, country: sch.country || "", from: sch.from || "", to: sch.to || "" });
+    let d = await ask(sch.style || "");
+    if (!d?.records?.length && sch.style && sch.genre) d = await ask(""); // style not found: widen to the genre
+    for (const r of d?.records || []) {
+      const k = lc(r.artist) + "|" + lc(r.title);
+      if (all.has(k)) continue;
+      all.set(k, { artist: r.artist, album: r.title, year: r.year, label: "", dcId: r.id, dc: { have: r.have || 0, want: r.want || 0, url: r.url, at: Date.now() },
+        facts: ["Found on Discogs under " + [r.styles?.slice(0, 3).join(", ") || sch.style || sch.genre, r.country, r.year].filter(Boolean).join(", ")] });
+    }
+  }
+  const seen = new Set([...digHistory.flatMap((d) => d.picks.map(keyOf)), ...Object.keys(reactions)]);
+  const artists = new Set();
+  const cands = [...all.values()].filter((c) => !seen.has(keyOf(c)) && !artists.has(lc(c.artist)) && artists.add(lc(c.artist)));
+  if (cands.length < 8) return [];
+  // The most wanted records of each kind, laid out so every stretch of the list holds each kind.
+  const lists = [["essential", 6], ["favourite", 14], ["deep", 20]].map(([t, n]) => cands.filter((c) => tierOf(c) === t).sort((a, b) => b.dc.want - a.dc.want).slice(0, n));
+  const pool = [];
+  for (let r = 0; r < 20; r++) for (const l of lists) if (l[r]) pool.push(l[r]);
+  setStatus("Choosing the best five from " + pool.length + " real records\u2026");
+  let res = null;
+  try { res = await askClaude(buildVibeDataPrompt(mood, pool), { signal: ctl.signal, onText }); }
+  catch (e) { if (e?.code !== "invalid_json") throw e; }
+  return res ? selectMix(pickFromPool(res, pool, 8)).slice(0, 5) : [];
+}
 
 // ---------- Producers and engineers of loved records ----------
 // Credits come from Discogs (richest for older and obscure records), with MusicBrainz as a backup.
@@ -1539,6 +1609,11 @@ $("digForm").addEventListener("submit", async (e) => {
         console.error("Data dig failed, falling back", e2);
       }
       if (!fromData) { picks = []; found = 0; setStatus("Digging through the crates\u2026"); }
+    } else if (verify && mood && discogsOn) {
+      // A vibe: search Discogs for real records that match, then let the AI choose and explain.
+      try { target = 8; picks = await vibeFromDiscogs(mood, onText); fromData = picks.length >= 3; }
+      catch (e2) { if (e2?.code === "cancelled") throw e2; console.error("Vibe dig from Discogs failed, falling back", e2); }
+      if (!fromData) { picks = []; found = 0; setStatus("Digging through the crates\u2026"); }
     }
     if (!fromData) {
     target = verify ? 10 : 5;
@@ -1594,7 +1669,7 @@ $("digForm").addEventListener("submit", async (e) => {
     renderHistory();
     renderProfile();
     render(picks, false, true, deeper);
-    setStatus((fromData ? picks.length + " real records, each found through real credits and labels. "
+    setStatus((fromData ? picks.length + (seedList.length ? " real records, each found through real credits and labels. " : " real records, found on Discogs for your vibe. ")
       : dropped ? "Only " + picks.length + " records could be confirmed as real albums, so that\u2019s all this dig shows. "
       : verify ? "Five real records dug, each checked on MusicBrainz. " : "Five records dug. ") + digsLeftNote());
     $("digBtn").textContent = "Dig again";

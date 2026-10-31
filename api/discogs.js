@@ -30,6 +30,7 @@ module.exports = async function handler(req, res) {
   if (url.searchParams.get("credits") === "1") return credits(url, artist, album, token, send);
   if (url.searchParams.get("find") === "1") return find(url, artist, token, send);
   if (url.searchParams.get("seed") === "1") return seedBundle(url, artist, token, send);
+  if (url.searchParams.get("vibe") === "1") return vibeSearch(url, token, send);
   if (!artist || !album) return send(400, { enabled: true, error: "artist and album are required" });
 
   let data;
@@ -202,4 +203,47 @@ async function seedBundle(url, artist, token, send) {
     }
     return send(200, { enabled: true, found: true, release, label, people }, "public, s-maxage=21600");
   } catch { return send(503, { enabled: true, found: null }); }
+}
+
+// ---------- Vibe digs: real records by genre, style, country and years ----------
+//   /api/discogs?vibe=1&genre=Rock&style=Soft Rock&country=US&from=1970&to=1979
+//   → {enabled, records: [{artist, title, year, country, styles, have, want, id, url}]}
+// Albums only (no singles or compilations), one entry per album with owners and wants summed over its pressings.
+async function vibeSearch(url, token, send) {
+  const g = (k) => clean(url.searchParams.get(k)).slice(0, 60);
+  const genre = g("genre"), style = g("style"), country = g("country");
+  const from = parseInt(g("from"), 10) || 0, to = parseInt(g("to"), 10) || from;
+  if (!genre && !style) return send(400, { enabled: true, error: "genre or style is required" });
+  const base = { type: "release", per_page: "100", ...(genre ? { genre } : {}), ...(style ? { style } : {}), ...(country ? { country } : {}) };
+  const inRange = (y) => !from || (+y >= from && +y <= (to || from));
+  try {
+    let results = [];
+    // Try the years as a range first; if Discogs doesn't take it, search without years and filter here.
+    const tries = from ? [{ ...base, year: from === to ? String(from) : from + "-" + to }, base] : [base];
+    for (const t of tries) {
+      for (const page of ["1", "2"]) {
+        const r = await dcGet("/database/search?" + new URLSearchParams({ ...t, page }), token);
+        if (r.status === 401 || r.status === 403) return send(200, { enabled: false }, "public, s-maxage=60");
+        if (!r.ok) break;
+        const d = await r.json();
+        results = results.concat(d.results || []);
+        if ((d.pagination?.pages || 1) <= 1) break;
+      }
+      if (results.filter((x) => inRange(x.year)).length >= 20) break;
+    }
+    const albums = new Map();
+    for (const x of results) {
+      const f = (x.format || []).join(" ");
+      if (!/LP|Album/i.test(f) || /Compilation|Single|Promo|Sampler/i.test(f) || !inRange(x.year)) continue;
+      const a = artistOf(x), t = titleOf(x);
+      if (!a || !t || /^various$/i.test(a)) continue;
+      const k = x.master_id ? "m" + x.master_id : squash(a + t);
+      const e = albums.get(k) || { artist: a, title: t, year: String(x.year || ""), country: x.country || "", styles: x.style || [], have: 0, want: 0, id: x.id,
+        url: x.master_id ? "https://www.discogs.com/master/" + x.master_id : "https://www.discogs.com" + (x.uri || "/release/" + x.id) };
+      e.have += x.community?.have || 0; e.want += x.community?.want || 0;
+      if (x.year && (!e.year || +x.year < +e.year)) e.year = String(x.year);
+      albums.set(k, e);
+    }
+    return send(200, { enabled: true, records: [...albums.values()].slice(0, 120) }, "public, s-maxage=21600");
+  } catch { return send(503, { enabled: true, records: null }); }
 }
