@@ -177,6 +177,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .suggest-opt span:first-child { flex: 1 1 14ch; min-width: 0; overflow-wrap: break-word; }
 .suggest-meta { flex: 0 1 auto; max-width: 100%; font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .suggest-opt:hover .suggest-meta, .suggest-opt[aria-selected="true"] .suggest-meta { color: var(--bg); }
+.person-btn { font: inherit; background: none; border: 0; padding: 0; color: var(--link); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: left; }
 .didyoumean { margin: -2px 0 0; font-size: 14px; color: var(--fg); }
 .didyoumean-btn { font: inherit; font-weight: 700; background: none; border: 0; padding: 0; color: var(--link); text-decoration: underline; cursor: pointer; }
 .react-note { font-size: 13px; color: var(--muted); align-self: center; }
@@ -579,6 +580,7 @@ function render(picks, isExample, fresh, append) {
         if (undo) delete reactions[k];
         else reactions[k] = { r: val, artist: p.artist, album: p.album, year: p.year || "", label: p.label || "", thread: p.thread || "", cover: p.cover || "", rgId: p.rgId || "", at: Date.now() };
         store.set("dc-reactions", reactions); renderHistory(); renderProfile(); renderCrate(); maybeAutoSummary();
+        if (!undo && val === "loved") queueCredits(k);
         react.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", "false"));
         if (reactions[k]) b.setAttribute("aria-pressed", "true");
         const NOTE = { loved: "Saved to your crate.", nope: "Got it, fewer like this.", known: "Noted. It won't come up again." };
@@ -991,6 +993,78 @@ const dropMainstream = (list, keep) => { const rare = list.filter((c) => !isMain
 const dcFresh = (dc) => !!dc && Date.now() - (dc.at || 0) < DC_FRESH_MS;
 const count = (n) => Number(n || 0).toLocaleString("en");
 
+// ---------- Producers and engineers of loved records ----------
+// Credits come from Discogs (richest for older and obscure records), with MusicBrainz as a backup.
+// Each loved record is looked up once, slowly and in order, and the credits are kept with the reaction.
+const creditQueue = [];
+let creditBusy = false;
+function queueCredits(k) {
+  if (!API_URL || sample) return;
+  const v = reactions[k];
+  if (!v || v.r !== "loved" || v.credits || creditQueue.includes(k)) return;
+  creditQueue.push(k); pumpCredits();
+}
+async function pumpCredits() {
+  if (creditBusy || !creditQueue.length) return;
+  creditBusy = true;
+  const k = creditQueue.shift(), v = reactions[k];
+  try {
+    if (v && v.r === "loved" && !v.credits) {
+      const c = await lookupCredits(v);
+      if (c && reactions[k] === v) { v.credits = c; store.set("dc-reactions", reactions); renderProfile(); }
+    }
+  } catch {} finally { creditBusy = false; setTimeout(pumpCredits, 1200); }
+}
+async function lookupCredits(v) {
+  const known = pickIndex()[keyOf(v)] || {};
+  const master = /\/master\/(\d+)/.exec(known.dc?.url || "")?.[1];
+  if (discogsOn) {
+    let d = null;
+    try { d = await (await fetch("/api/discogs?credits=1&" + new URLSearchParams(master ? { master } : { artist: v.artist, album: v.album }))).json(); } catch { return null; }
+    if (d?.enabled === false) discogsOn = false;
+    else if (d?.found === null) return null; // Discogs busy: try again on a later visit
+    else if (d?.found && (d.producers?.length || d.engineers?.length)) return { p: d.producers || [], e: d.engineers || [], src: "discogs" };
+  }
+  // Backup: the credits MusicBrainz lists on the album's first release.
+  const rgId = v.rgId || known.rgId;
+  if (!rgId) return { p: [], e: [], src: "none" };
+  const list = await mbQuick("release", { "release-group": rgId, limit: 1 });
+  if (!list) return null;
+  const id = list.releases?.[0]?.id;
+  if (!id) return { p: [], e: [], src: "none" };
+  const det = await mbQuick("release/" + id, { inc: "artist-rels+recordings+recording-level-rels" });
+  if (!det) return null;
+  const rels = [...(det.relations || []), ...(det.media || []).flatMap((m) => (m.tracks || []).flatMap((t) => t.recording?.relations || []))];
+  const own = squash(v.artist);
+  const names = (re) => [...new Set(rels.filter((r) => r.artist && re.test(r.type || "")).map((r) => r.artist.name))].filter((n) => squash(n) !== own).slice(0, 8);
+  const p = names(/^producer$/i);
+  return { p, e: names(/^(engineer|recording|mix|audio|sound)$/i).filter((n) => !p.includes(n)), src: "musicbrainz" };
+}
+// People credited on two or more loved records, most records first.
+function lovedPeople(loved) {
+  const people = {};
+  loved.forEach((rec) => {
+    const c = rec.credits; if (!c) return;
+    [...(c.p || []), ...(c.e || [])].forEach((n) => {
+      const id = squash(n); if (!id) return;
+      const e = (people[id] ||= { name: n, recs: [] });
+      if (!e.recs.some((x) => keyOf(x) === keyOf(rec))) e.recs.push(rec);
+    });
+  });
+  return Object.values(people).filter((x) => x.recs.length >= 2).sort((a, b) => b.recs.length - a.recs.length).slice(0, 5);
+}
+// Start a dig from the loved records a person worked on: their shared credit becomes the common ground.
+function digFromPerson(person) {
+  if ($("digBtn").disabled) return;
+  $("modeRecords").checked = true; setDigMode();
+  const recs = person.recs.slice(0, MAX_SEEDS).map((r) => r.artist + " \u2013 " + r.album);
+  while (seeds().length < recs.length) addSeedField("");
+  seeds().forEach((inp, i) => { inp.value = recs[i] || ""; });
+  $("digForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  const form = $("digForm");
+  if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event("submit", { cancelable: true }));
+}
+
 // ---------- Suggestions and corrections for the record fields ----------
 // While someone types, suggest real artists and albums from MusicBrainz. When they leave a field,
 // offer a correction if what they typed is close to, but not exactly, a real artist or album.
@@ -1349,6 +1423,7 @@ else render(EXAMPLE.picks, true, false);
 renderHistory();
 renderProfile();
 renderCrate();
+Object.keys(reactions).filter((k) => reactions[k].r === "loved" && !reactions[k].credits).slice(0, 8).forEach(queueCredits);
 
 // Loved records fill crates of 10, oldest first. A new crate starts when one is full.
 function renderCrate() {
@@ -1567,11 +1642,25 @@ function renderProfile() {
     ["Genres you love", (saved?.v === 2 && Array.isArray(saved.genres) ? saved.genres : []).join(", ")],
     ["Eras you love", tally(loved, decade)],
     ["Labels you love", tally(loved, (p) => p.label)],
+    ["Producers & engineers you love", (() => {
+      const ppl = lovedPeople(loved);
+      if (!ppl.length) return "";
+      const wrap = document.createElement("span");
+      ppl.forEach((x, i) => {
+        const b = document.createElement("button"); b.type = "button"; b.className = "person-btn";
+        b.textContent = x.name + " (" + x.recs.length + ")";
+        b.title = "Dig from your " + x.recs.length + " loved records with " + x.name;
+        b.setAttribute("aria-label", x.name + ", on " + x.recs.length + " of your loved records. Dig from these records.");
+        b.onclick = () => digFromPerson(x);
+        wrap.append(...(i ? [", ", b] : [b]));
+      });
+      return wrap;
+    })()],
     ["Not for you", nope.slice(0, 6).map((p) => p.artist).join(", ")]
   ].filter(([, v]) => v);
   if (rows.length) {
     const dl = document.createElement("dl"); dl.className = "facts";
-    rows.forEach(([k, v]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; dl.append(dt, dd); });
+    rows.forEach(([k, v]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); if (v instanceof Node) dd.append(v); else dd.textContent = v; dl.append(dt, dd); });
     box.append(dl);
   }
 

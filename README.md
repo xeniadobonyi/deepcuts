@@ -31,7 +31,7 @@ Optional environment variables:
 
 - `MODEL`: the Groq model to use (default `openai/gpt-oss-120b`)
 - `REQUESTS_PER_DAY`: optional limit on requests per visitor per day (off unless set)
-- `DISCOGS_TOKEN`: a free personal access token from discogs.com → Settings → Developers. Turns on the rarity filter and the "own it · want it" counts. Discogs' API terms apply: the site credits Discogs next to the counts, says it isn't affiliated with Discogs, and never shows counts more than 6 hours old.
+- `DISCOGS_TOKEN`: a free personal access token from discogs.com → Settings → Developers. Turns on the rarity filter, the rarity meter and producer credits for the taste profile (MusicBrainz is the backup for credits). Discogs' API terms apply: the site credits Discogs next to the counts, says it isn't affiliated with Discogs, and never shows counts more than 6 hours old.
 
 The GitHub Pages copy (xeniadobonyi.github.io/deepcuts) has no server, so it shows the sample dig only. Share the Vercel address instead.
 
