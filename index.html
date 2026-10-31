@@ -153,6 +153,13 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .ascii-rec:hover, .ascii-rec[aria-expanded="true"] { background: var(--fg); color: var(--bg); }
 .ascii-rec:focus-visible { outline: 2px solid var(--link); outline-offset: 0; }
 .crate-detail { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; border-top: 1px solid var(--rule); padding-top: 12px; }
+.mode-switch { display: inline-flex; align-self: flex-start; border: 1px solid var(--fg); border-radius: 3px; overflow: hidden; }
+.mode-opt { position: relative; cursor: pointer; }
+.mode-opt input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.mode-opt span { display: block; padding: 9px 16px; min-height: 40px; font-size: 15px; font-weight: 500; background: var(--surface); color: var(--fg); }
+.mode-opt + .mode-opt span { border-left: 1px solid var(--fg); }
+.mode-opt input:checked + span { background: var(--fg); color: var(--bg); font-weight: 700; }
+.mode-opt input:focus-visible + span { outline: 2px solid var(--link); outline-offset: -4px; }
 .react-note { font-size: 13px; color: var(--muted); align-self: center; }
 .crate-count { font-weight: 400; color: var(--muted); }
 .loved { display: flex; flex-direction: column; }
@@ -180,16 +187,20 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
   <form id="digForm" novalidate>
     <div>
       <h2 class="sec-title">Start a dig</h2>
-      <p class="label" style="margin:0">Start from records you love, keywords, or both.</p>
+      <p class="label" style="margin:0">Start from records you love, or describe a vibe.</p>
     </div>
-    <fieldset>
+    <div class="mode-switch" role="radiogroup" aria-label="Dig from">
+      <label class="mode-opt"><input type="radio" name="digMode" id="modeRecords" value="records" checked><span>Records I love</span></label>
+      <label class="mode-opt"><input type="radio" name="digMode" id="modeVibe" value="vibe"><span>A vibe</span></label>
+    </div>
+    <fieldset id="recordsFs">
       <legend class="label">Up to three things you love: an album, a song or an artist</legend>
       <div class="seed-list" id="seedList">
         <input type="text" id="seed1" aria-label="Record 1" placeholder="e.g. Madvillain – Madvillainy" autocomplete="off">
       </div>
       <button type="button" class="btn ghost add-seed" id="addSeed">+ Add another record</button>
     </fieldset>
-    <fieldset>
+    <fieldset id="vibeFs" hidden>
       <legend class="label">Keywords, a mood or a moment</legend>
       <input type="text" id="mood" aria-label="Keywords, a mood or a moment" placeholder="e.g. California sunny 70s, Brazilian jazz, rainy Sunday" autocomplete="off">
     </fieldset>
@@ -600,6 +611,15 @@ const ERR = {
   overloaded: "Claude is busy right now. Wait a minute and press Dig again."
 };
 
+// ---------- Dig mode: "Records I love" or "A vibe" ----------
+function digMode() { return $("modeVibe").checked ? "vibe" : "records"; }
+function setDigMode() {
+  const vibe = digMode() === "vibe";
+  $("recordsFs").hidden = vibe;
+  $("vibeFs").hidden = !vibe;
+}
+document.querySelectorAll("input[name='digMode']").forEach((r) => r.addEventListener("change", () => { setDigMode(); setStatus(""); (digMode() === "vibe" ? $("mood") : seeds()[0]).focus(); }));
+
 // ---------- Data-first digging ----------
 // For digs that start from records, candidates come from real MusicBrainz links:
 // the same label in the same years, the producers and engineers on the record, and related artists.
@@ -805,12 +825,15 @@ function pickFromPool(res, pool) {
 
 $("digForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const seedList = seeds().map((s) => s.value.trim()).filter(Boolean).slice(0, MAX_SEEDS);
-  const mood = $("mood").value.trim();
-  if (!seedList.length && !mood) { setStatus("Add a record you love or describe a mood, then dig.", true); seeds()[0].focus(); return; }
+  // One mode at a time: records follow real links, a vibe is matched on its keywords.
+  const vibeMode = digMode() === "vibe";
+  const seedList = vibeMode ? [] : seeds().map((s) => s.value.trim()).filter(Boolean).slice(0, MAX_SEEDS);
+  const mood = vibeMode ? $("mood").value.trim() : "";
+  if (!vibeMode && !seedList.length) { setStatus("Add an album, a song or an artist you love, then dig.", true); seeds()[0].focus(); return; }
+  if (vibeMode && !mood) { setStatus("Describe a vibe, like \u201cBrazilian jazz\u201d or \u201crainy Sunday\u201d, then dig.", true); $("mood").focus(); return; }
   if (!aiReady()) { setStatus(ERR.no_ai, true); renderKeyBox(); if (OWNER_TEST) $("apiKey").focus(); return; }
   if (limited() && digsUsed() >= DIGS_PER_DAY) { setStatus("You've used today's " + DIGS_PER_DAY + " free digs. Come back tomorrow for more.", true); return; }
-  store.set("dc-form", { seeds: seeds().map((s) => s.value).filter((v) => v.trim()), mood });
+  store.set("dc-form", { seeds: seeds().map((s) => s.value).filter((v) => v.trim()), mood: $("mood").value.trim(), mode: digMode() });
   ctl = new AbortController();
   $("digBtn").disabled = true; $("stopBtn").hidden = false;
   setStatus("Digging through the crates… this can take up to a minute.");
@@ -909,7 +932,8 @@ $("stopBtn").onclick = () => ctl?.abort();
 
 // Initial state
 const saved = store.get("dc-form", null);
-if (saved) { (saved.seeds || []).filter(Boolean).slice(0, MAX_SEEDS).forEach((v, i) => { if (i === 0) seeds()[0].value = v; else addSeedField(v); }); $("mood").value = saved.mood || ""; }
+if (saved) { (saved.seeds || []).filter(Boolean).slice(0, MAX_SEEDS).forEach((v, i) => { if (i === 0) seeds()[0].value = v; else addSeedField(v); }); $("mood").value = saved.mood || ""; if (saved.mode === "vibe") $("modeVibe").checked = true; }
+setDigMode();
 if (current?.picks?.length) { render(current.picks, false, false); $("digBtn").textContent = "Dig again"; }
 else render(EXAMPLE.picks, true, false);
 renderHistory();
