@@ -211,10 +211,10 @@ async function seedBundle(url, artist, token, send) {
 // Albums only (no singles or compilations), one entry per album with owners and wants summed over its pressings.
 async function vibeSearch(url, token, send) {
   const g = (k) => clean(url.searchParams.get(k)).slice(0, 60);
-  const genre = g("genre"), style = g("style"), country = g("country");
+  const genre = g("genre"), style = g("style"), country = g("country"), label = g("label");
   const from = parseInt(g("from"), 10) || 0, to = parseInt(g("to"), 10) || from;
-  if (!genre && !style) return send(400, { enabled: true, error: "genre or style is required" });
-  const base = { type: "release", per_page: "100", ...(genre ? { genre } : {}), ...(style ? { style } : {}), ...(country ? { country } : {}) };
+  if (!genre && !style && !label) return send(400, { enabled: true, error: "genre, style or label is required" });
+  const base = { type: "release", per_page: "100", ...(genre ? { genre } : {}), ...(style ? { style } : {}), ...(country ? { country } : {}), ...(label ? { label } : {}) };
   const inRange = (y) => !from || (+y >= from && +y <= (to || from));
   try {
     let results = [];

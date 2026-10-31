@@ -1157,13 +1157,16 @@ function vibePlanPrompt(mood) {
     "Search: \"" + mood + "\"",
     "Discogs genres (use exactly one of these per search): " + DISCOGS_GENRES.join("; "),
     "Give 2 or 3 searches that together cover the search well, from different angles (for example a main style and a neighbouring one).",
+    "Discogs only knows countries, not cities or regions. If the search names a city or region (California, Detroit, Bristol, Ibiza, Lagos), turn it into the styles of that place's scene, and make one search a label search: a record label that was based there and defined its sound in those years (for example Asylum for 70s Los Angeles, Motown for 60s Detroit).",
+    "- label: a real record label name for a label search, otherwise \"\". A label search may leave style empty.",
     "- style: one real Discogs style, spelled as on Discogs (for example Soft Rock, Deep House, Bossa Nova, Italo-Disco, Synth-pop, Psychedelic Rock, Afrobeat, Soul-Jazz). Use \"\" if unsure.",
     "- country: the country as Discogs names it (for example US, UK, France, Japan, Brazil), or \"\" if the search names no place.",
     "- from and to: the years the search implies (\"70s\" means 1970 to 1979), or null if it implies none.",
-    'Reply with only JSON: {"searches": [{"genre": string, "style": string, "country": string, "from": number|null, "to": number|null}]}'
+    'Reply with only JSON: {"place": string, "searches": [{"genre": string, "style": string, "label": string, "country": string, "from": number|null, "to": number|null}]}',
+    "- place: the city or region the search names, or \"\" if none."
   ].join("\n");
 }
-function buildVibeDataPrompt(mood, pool) {
+function buildVibeDataPrompt(mood, pool, place = "") {
   return [
     "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
     "The listener searched for: \"" + mood + "\". This search is the brief: every pick must clearly match all of its words.",
@@ -1174,6 +1177,7 @@ function buildVibeDataPrompt(mood, pool) {
     "- The listener gets a mix of kinds: " + Object.entries(mixNow()).filter(([, n]) => n).map(([t, n]) => n + " " + TIER_NAMES[t]).join(", ") + ". Among your 8, include at least that many of each kind where the list has them. Within each kind, choose the most accomplished records: the ones critics and collectors rate highest.",
     digDepth > 0 ? "- This is a deeper dig: favour the most obscure candidates that still fit perfectly." : "",
     "- Only choose records you are confident truly match the search. Skip candidates that only match it loosely.",
+    place ? "- The search names a place: " + place + ". Discogs only lists countries, so only choose artists you know were based in or made this record in " + place + ". Records from its labels count." : "",
     "- Do not mention the Discogs counts or the kind in your text. Only state facts you are sure of; you may describe how a record sounds.",
     WHY_STYLE + "\n  Say how it fits the search (\"" + mood + "\") along the way.",
     "- \"thread\": 2 to 4 words naming how it matches the search, e.g. \"Laurel Canyon, 1972\", \"West Coast soft rock\".",
@@ -1186,20 +1190,21 @@ async function vibeFromDiscogs(mood, onText) {
   try { plan = await askClaude(vibePlanPrompt(mood), { signal: ctl.signal }); }
   catch (e) { if (e?.code === "cancelled") throw e; return []; }
   const list = Array.isArray(plan) ? plan : (plan?.searches || Object.values(plan || {}).find(Array.isArray) || []);
-  const searches = list.filter((x) => x && (x.genre || x.style)).slice(0, 3);
+  const searches = list.filter((x) => x && (x.genre || x.style || x.label)).slice(0, 3);
+  const place = String(plan?.place || "").trim();
   if (!searches.length) return [];
   const all = new Map();
   for (const sch of searches) {
     const yrs = sch.from ? (sch.to && sch.to !== sch.from ? sch.from + "\u2013" + sch.to : String(sch.from)) : "";
-    setStatus("Searching Discogs: " + [sch.style || sch.genre, sch.country, yrs].filter(Boolean).join(", ") + "\u2026");
-    const ask = (style) => discogsAsk({ vibe: "1", genre: sch.genre || "", style, country: sch.country || "", from: sch.from || "", to: sch.to || "" });
+    setStatus("Searching Discogs: " + [sch.label ? "the " + sch.label + " label" : sch.style || sch.genre, sch.country, yrs].filter(Boolean).join(", ") + "\u2026");
+    const ask = (style) => discogsAsk({ vibe: "1", genre: sch.genre || "", style, label: sch.label || "", country: sch.country || "", from: sch.from || "", to: sch.to || "" });
     let d = await ask(sch.style || "");
     if (!d?.records?.length && sch.style && sch.genre) d = await ask(""); // style not found: widen to the genre
     for (const r of d?.records || []) {
       const k = lc(r.artist) + "|" + lc(r.title);
       if (all.has(k)) continue;
       all.set(k, { artist: r.artist, album: r.title, year: r.year, label: "", dcId: r.id, dc: { have: r.have || 0, want: r.want || 0, url: r.url, at: Date.now() },
-        facts: ["Found on Discogs under " + [r.styles?.slice(0, 3).join(", ") || sch.style || sch.genre, r.country, r.year].filter(Boolean).join(", ")] });
+        facts: ["Found on Discogs under " + [sch.label ? "the " + sch.label + " label" : "", r.styles?.slice(0, 3).join(", ") || sch.style || sch.genre, r.country, r.year].filter(Boolean).join(", ")] });
     }
   }
   const seen = new Set([...digHistory.flatMap((d) => d.picks.map(keyOf)), ...Object.keys(reactions)]);
@@ -1212,7 +1217,7 @@ async function vibeFromDiscogs(mood, onText) {
   for (let r = 0; r < 20; r++) for (const l of lists) if (l[r]) pool.push(l[r]);
   setStatus("Choosing the best five from " + pool.length + " real records\u2026");
   let res = null;
-  try { res = await askClaude(buildVibeDataPrompt(mood, pool), { signal: ctl.signal, onText }); }
+  try { res = await askClaude(buildVibeDataPrompt(mood, pool, place), { signal: ctl.signal, onText }); }
   catch (e) { if (e?.code !== "invalid_json") throw e; }
   return res ? selectMix(pickFromPool(res, pool, 8)).slice(0, 5) : [];
 }
