@@ -137,6 +137,8 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .sleeve { position: relative; }
 .sleeve img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .sleeve.has-cover span { visibility: hidden; }
+.unverified { margin: 0; font-size: 13px; color: var(--fg); border-left: 3px solid var(--muted); padding: 2px 0 2px 10px; max-width: 62ch; }
+.pick.is-unverified .sleeve { opacity: .45; }
 .react-note { font-size: 13px; color: var(--muted); align-self: center; }
 .crate-count { font-weight: 400; color: var(--muted); }
 .loved { display: flex; flex-direction: column; }
@@ -376,12 +378,29 @@ function pumpCovers() {
   if (coverBusy || !coverQueue.length) return;
   coverBusy = true;
   const [sleeve, p] = coverQueue.shift();
-  const img = new Image();
-  img.alt = ""; img.decoding = "async";
   const done = () => { coverBusy = false; setTimeout(pumpCovers, 1100); };
-  img.onload = () => { if (sleeve.isConnected) { sleeve.prepend(img); sleeve.classList.add("has-cover"); } done(); };
-  img.onerror = done;
-  img.src = "/api/cover?artist=" + encodeURIComponent(p.artist) + "&album=" + encodeURIComponent(p.album);
+  fetch("/api/cover?check=1&artist=" + encodeURIComponent(p.artist) + "&album=" + encodeURIComponent(p.album))
+    .then((r) => r.json())
+    .then((info) => {
+      if (!sleeve.isConnected) return;
+      if (info.found === false) {
+        // The album isn't on MusicBrainz: the AI may have invented it. Say so plainly.
+        const card = sleeve.closest(".pick");
+        const top = card?.querySelector(".pick-top");
+        if (top && !card.querySelector(".unverified")) {
+          card.classList.add("is-unverified");
+          const n = document.createElement("p"); n.className = "unverified";
+          n.textContent = "Couldn't find this album in MusicBrainz. The AI may have made it up, so check before you go looking.";
+          top.after(n);
+        }
+      } else if (info.cover) {
+        const img = new Image(); img.alt = ""; img.decoding = "async";
+        img.onload = () => { if (sleeve.isConnected) { sleeve.prepend(img); sleeve.classList.add("has-cover"); } };
+        img.src = info.cover;
+      }
+    })
+    .catch(() => {})
+    .finally(done);
 }
 
 function renderKeyBox() {
