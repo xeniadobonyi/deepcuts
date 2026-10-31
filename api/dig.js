@@ -1,17 +1,20 @@
-// Deep Cuts API (Vercel Function): forwards dig requests to Claude and streams the answer back.
-// The Anthropic API key is read from the ANTHROPIC_API_KEY environment variable and never reaches the browser.
+// Deep Cuts API (Vercel Function): sends each dig to Groq's free API and streams the answer back.
+// The Groq key is read from the GROQ_API_KEY environment variable and never reaches the browser.
+// The answer is re-sent in the same event format the page already reads, so the page needs no changes.
 
 const MAX_PROMPT_CHARS = 12000;
-const LIMIT_PER_HOUR = Number(process.env.DIGS_PER_HOUR || 20);
-const hits = new Map(); // simple per-visitor limit; resets when the function restarts
+const REQUESTS_PER_DAY = Number(process.env.REQUESTS_PER_DAY || 15); // 10 digs plus a few taste summaries
+const hits = new Map(); // best-effort per-visitor limit; resets when the function restarts
 
-function tooMany(ip) {
-  const now = Date.now();
-  const recent = (hits.get(ip) || []).filter((t) => now - t < 3600_000);
-  if (recent.length >= LIMIT_PER_HOUR) { hits.set(ip, recent); return true; }
-  recent.push(now);
-  hits.set(ip, recent);
-  if (hits.size > 5000) hits.clear();
+function dayKey() { return new Date().toISOString().slice(0, 10); }
+
+function overLimit(ip) {
+  const today = dayKey();
+  const rec = hits.get(ip);
+  const n = rec && rec.day === today ? rec.n : 0;
+  if (n >= REQUESTS_PER_DAY) return true;
+  hits.set(ip, { day: today, n: n + 1 });
+  if (hits.size > 20000) hits.clear();
   return false;
 }
 
@@ -29,12 +32,16 @@ async function readBody(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
+function delta(text) {
+  return "data: " + JSON.stringify({ type: "content_block_delta", delta: { type: "text_delta", text } }) + "\n\n";
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return sendJSON(res, 405, { error: { message: "Use POST." } });
-  if (!process.env.ANTHROPIC_API_KEY) return sendJSON(res, 500, { error: { message: "Server is missing its API key." } });
+  if (!process.env.GROQ_API_KEY) return sendJSON(res, 500, { error: { message: "Server is missing its API key." } });
 
   const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "unknown";
-  if (tooMany(ip)) return sendJSON(res, 429, { error: { message: "Too many digs this hour. Try again later." } });
+  if (overLimit(ip)) return sendJSON(res, 429, { error: { message: "You've used today's free digs. Come back tomorrow." } });
 
   let prompt;
   try { ({ prompt } = await readBody(req)); } catch { return sendJSON(res, 400, { error: { message: "Send JSON: {\"prompt\": \"...\"}" } }); }
@@ -44,41 +51,55 @@ module.exports = async function handler(req, res) {
 
   let upstream;
   try {
-    upstream = await fetch("https://api.anthropic.com/v1/messages", {
+    upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
+      headers: { "content-type": "application/json", authorization: "Bearer " + process.env.GROQ_API_KEY },
       body: JSON.stringify({
-        model: process.env.MODEL || "claude-sonnet-5-5",
+        model: process.env.MODEL || "llama-3.3-70b-versatile",
         max_tokens: 3000,
+        temperature: 0.7,
         stream: true,
         messages: [{ role: "user", content: prompt }],
       }),
     });
   } catch {
-    return sendJSON(res, 502, { error: { message: "Couldn't reach Claude." } });
+    return sendJSON(res, 502, { error: { message: "Couldn't reach the AI service." } });
   }
 
   if (!upstream.ok) {
-    // Don't pass an invalid-key error through as the visitor's fault.
-    const status = upstream.status === 401 || upstream.status === 403 ? 500 : upstream.status;
     let detail = {};
     try { detail = await upstream.json(); } catch {}
-    return sendJSON(res, status, { error: { message: detail?.error?.message || "Claude returned an error." } });
+    // Groq's own limit is shared by every visitor: when it is used up, say so plainly.
+    if (upstream.status === 429) return sendJSON(res, 429, { error: { message: "Today's free digs are used up. Come back tomorrow." } });
+    const status = upstream.status === 401 || upstream.status === 403 ? 500 : upstream.status;
+    return sendJSON(res, status, { error: { message: detail?.error?.message || "The AI service returned an error." } });
   }
 
   res.statusCode = 200;
   res.setHeader("content-type", "text/event-stream");
   res.setHeader("cache-control", "no-cache");
+
   const reader = upstream.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      res.write(Buffer.from(value));
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (data === "[DONE]") continue;
+        let ev;
+        try { ev = JSON.parse(data); } catch { continue; }
+        const text = ev?.choices?.[0]?.delta?.content;
+        if (text) res.write(delta(text));
+        if (ev?.error) res.write("data: " + JSON.stringify({ type: "error", error: { type: "api_error", message: ev.error.message || "" } }) + "\n\n");
+      }
     }
   } catch {
     // Visitor left or the stream broke; nothing more to send.

@@ -270,6 +270,14 @@ const MODEL = "claude-sonnet-5-5";
 const getKey = () => (OWNER_TEST ? store.get("dc-api-key", "") : "");
 const aiReady = () => !!(sample || API_URL || getKey());
 
+// Free public site: each visitor gets 10 digs a day (the server enforces its own limit too).
+const DIGS_PER_DAY = 10;
+const todayKey = () => new Date().toISOString().slice(0, 10);
+const limited = () => !!API_URL && !sample;
+function digsUsed() { const d = store.get("dc-digs", null); return d && d.day === todayKey() ? d.n : 0; }
+function countDig() { store.set("dc-digs", { day: todayKey(), n: digsUsed() + 1 }); }
+function digsLeftNote() { return limited() ? Math.max(0, DIGS_PER_DAY - digsUsed()) + " of " + DIGS_PER_DAY + " free digs left today." : ""; }
+
 function parseJSONLoose(t) {
   try { return JSON.parse(t); } catch {}
   const f = t.match(/```(?:json)?\s*([\s\S]*?)```/); if (f) { try { return JSON.parse(f[1]); } catch {} }
@@ -434,7 +442,7 @@ function buildPrompt(seedList, mood) {
 
 const ERR = {
   not_granted: "Live digging needs permission to use Claude. Reload the page to be asked again.",
-  rate_limited: "Too many digs in a short time. Try again in a few minutes.",
+  rate_limited: "Today's free digs are used up. Come back tomorrow for more.",
   session_expired: "Your session has expired. Sign in to Claude again, then dig.",
   invalid_json: "The dig came back in the wrong shape. Press Dig again.",
   refused: "That request couldn't be answered. Try different records.",
@@ -451,6 +459,7 @@ $("digForm").addEventListener("submit", async (e) => {
   const mood = $("mood").value.trim();
   if (!seedList.length && !mood) { setStatus("Add a record you love or describe a mood, then dig.", true); seeds()[0].focus(); return; }
   if (!aiReady()) { setStatus(ERR.no_ai, true); renderKeyBox(); if (OWNER_TEST) $("apiKey").focus(); return; }
+  if (limited() && digsUsed() >= DIGS_PER_DAY) { setStatus("You've used today's " + DIGS_PER_DAY + " free digs. Come back tomorrow for more.", true); return; }
   store.set("dc-form", { seeds: seeds().map((s) => s.value).filter((v) => v.trim()), mood });
   ctl = new AbortController();
   $("digBtn").disabled = true; $("stopBtn").hidden = false;
@@ -474,6 +483,7 @@ $("digForm").addEventListener("submit", async (e) => {
     const picks = (Array.isArray(res) ? res : []).filter((p) => p && p.artist && p.album).slice(0, 5)
       .map((p) => ({ artist: String(p.artist), album: String(p.album), year: p.year ? String(p.year) : "", label: p.label ? String(p.label) : "", thread: p.thread ? String(p.thread) : "", why: p.why ? String(p.why) : "" }));
     if (!picks.length) throw { code: "invalid_json" };
+    if (limited()) countDig();
     current = { picks, seeds: seedList, mood };
     store.set("dc-last", current);
     digHistory.unshift({ date: new Date().toISOString(), seeds: seedList, mood, picks });
@@ -482,7 +492,7 @@ $("digForm").addEventListener("submit", async (e) => {
     renderHistory();
     renderProfile();
     render(picks, false, true);
-    setStatus("Five records dug. Mark what you think, then dig again for a sharper set.");
+    setStatus("Five records dug. Mark what you think, then dig again for a sharper set. " + digsLeftNote());
     $("digBtn").textContent = "Dig again";
   } catch (err) {
     if (err?.code === "cancelled") setStatus("Stopped.");
@@ -617,7 +627,7 @@ function renderProfile() {
 
 (async () => {
   try { sample = await window.claude?.use?.("sample"); } catch { sample = null; }
-  if (!sample) { renderKeyBox(); }
+  if (!sample) { renderKeyBox(); if (limited()) setStatus(digsLeftNote()); }
 })();
 </script>
 
