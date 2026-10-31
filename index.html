@@ -139,6 +139,15 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .sleeve.has-cover span { visibility: hidden; }
 .unverified { margin: 0; font-size: 13px; color: var(--fg); border-left: 3px solid var(--muted); padding: 2px 0 2px 10px; max-width: 62ch; }
 .pick.is-unverified .sleeve { opacity: .45; }
+.crates { display: flex; flex-direction: column; gap: 28px; }
+.crate-box { display: flex; flex-direction: column; gap: 10px; }
+.ascii-crate { display: flex; flex-direction: column; font-family: var(--mono); font-size: clamp(10px, 3.1vw, 14px); line-height: 1.55; overflow-x: auto; max-width: 100%; }
+.ascii-line { display: block; white-space: pre; color: var(--fg); }
+.ascii-empty { color: var(--muted); }
+.ascii-rec { font: inherit; text-align: left; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; color: var(--fg); width: max-content; }
+.ascii-rec:hover, .ascii-rec[aria-expanded="true"] { background: var(--fg); color: var(--bg); }
+.ascii-rec:focus-visible { outline: 2px solid var(--link); outline-offset: 0; }
+.crate-detail { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; border-top: 1px solid var(--rule); padding-top: 12px; }
 .react-note { font-size: 13px; color: var(--muted); align-self: center; }
 .crate-count { font-weight: 400; color: var(--muted); }
 .loved { display: flex; flex-direction: column; }
@@ -203,8 +212,8 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
   </section>
 
   <section>
-    <h2 class="sec-title">Your crate <span class="crate-count" id="crateCount"></span></h2>
-    <div class="loved" id="loved"></div>
+    <h2 class="sec-title">Your crates <span class="crate-count" id="crateCount"></span></h2>
+    <div class="crates" id="loved"></div>
   </section>
 
   <section id="pastSec" hidden>
@@ -501,7 +510,7 @@ function render(picks, isExample, fresh) {
       b.onclick = () => {
         const undo = reactions[k]?.r === val;
         if (undo) delete reactions[k];
-        else reactions[k] = { r: val, artist: p.artist, album: p.album, year: p.year || "", label: p.label || "", thread: p.thread || "", at: Date.now() };
+        else reactions[k] = { r: val, artist: p.artist, album: p.album, year: p.year || "", label: p.label || "", thread: p.thread || "", cover: p.cover || "", rgId: p.rgId || "", at: Date.now() };
         store.set("dc-reactions", reactions); renderHistory(); renderProfile(); renderCrate(); maybeAutoSummary();
         react.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", "false"));
         if (reactions[k]) b.setAttribute("aria-pressed", "true");
@@ -874,44 +883,85 @@ renderHistory();
 renderProfile();
 renderCrate();
 
+// Loved records fill crates of 10, oldest first. A new crate starts when one is full.
+const CRATE_SIZE = 10;
+let openCrateRecord = null;
 function renderCrate() {
   const box = $("loved"); box.replaceChildren();
   const idx = pickIndex();
   const items = Object.entries(reactions).filter(([, v]) => v.r === "loved")
     .map(([k, v]) => ({ k, at: v.at || 0, ...(idx[k] || {}), ...v }))
-    .sort((a, b) => b.at - a.at);
-  $("crateCount").textContent = items.length ? "(" + items.length + ")" : "";
+    .sort((a, b) => a.at - b.at);
+  const crates = [];
+  for (let i = 0; i < items.length; i += CRATE_SIZE) crates.push(items.slice(i, i + CRATE_SIZE));
+  $("crateCount").textContent = items.length ? "(" + items.length + " record" + (items.length === 1 ? "" : "s") + ")" : "";
   if (!items.length) {
     const e = document.createElement("p"); e.className = "empty";
-    e.textContent = "Tap Loved it on any record and it lands here, with links to listen, so you can come back to it.";
+    e.textContent = "Tap Loved it on any record and it goes into your first crate. Each crate holds 10 records; when one is full, a new one starts.";
     box.append(e); return;
   }
-  items.forEach((p) => {
-    const row = document.createElement("div"); row.className = "loved-item";
-    const head = document.createElement("div"); head.className = "loved-head";
-    const name = document.createElement("p"); name.className = "loved-name";
-    const b = document.createElement("b"); b.textContent = p.artist;
-    name.append(b, document.createTextNode(" — "), Object.assign(document.createElement("i"), { textContent: p.album }));
-    const meta = document.createElement("span"); meta.className = "meta"; meta.textContent = [p.year, p.label].filter(Boolean).join(" · ");
-    head.append(name); if (meta.textContent) head.append(meta);
-    const rm = document.createElement("button"); rm.type = "button"; rm.className = "chip"; rm.textContent = "Remove";
-    rm.setAttribute("aria-label", "Remove " + p.artist + " — " + p.album + " from your crate");
-    rm.onclick = () => {
-      delete reactions[p.k]; store.set("dc-reactions", reactions);
-      document.querySelectorAll(".chip[data-r='loved']").forEach((c) => { if (c.dataset.k === p.k) c.setAttribute("aria-pressed", "false"); });
-      renderCrate(); renderProfile(); renderHistory(); maybeAutoSummary();
-    };
-    const links = document.createElement("div"); links.className = "links";
-    links.append(
-      linkEl("YouTube", "https://www.youtube.com/results?search_query=" + q(p) + "+full+album"),
-      linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
-      linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
-      linkEl("Bandcamp", "https://bandcamp.com/search?q=" + q(p)),
-      linkEl("Discogs", "https://www.discogs.com/search/?type=all&q=" + q(p))
-    );
-    row.append(head, links, rm);
-    box.append(row);
+  // Each crate is drawn in plain ASCII, one line per record spine. Newest crate first.
+  const W = 40, IN = W - 4;
+  const ascii = (t) => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, "-").replace(/[^\x20-\x7e]/g, "?");
+  const fit = (t) => (t.length > IN ? t.slice(0, IN - 2) + ".." : t.padEnd(IN, " "));
+  const line = (t) => "| " + fit(t) + " |";
+  crates.map((recs, n) => ({ recs, n })).reverse().forEach(({ recs, n }) => {
+    const crate = document.createElement("div"); crate.className = "ascii-crate";
+    const label = " CRATE " + (n + 1) + " ", count = recs.length === CRATE_SIZE ? " FULL " : " " + recs.length + "/10 ";
+    const top = document.createElement("span"); top.className = "ascii-line";
+    top.textContent = "+--" + label + "-".repeat(Math.max(1, W - 6 - label.length - count.length)) + count + "--+";
+    crate.append(top);
+    const panel = document.createElement("div"); panel.className = "crate-detail"; panel.hidden = true;
+    for (let i = 0; i < CRATE_SIZE; i++) {
+      const p = recs[i], num = String(i + 1).padStart(2, "0");
+      if (!p) {
+        const empty = document.createElement("span"); empty.className = "ascii-line ascii-empty"; empty.setAttribute("aria-hidden", "true");
+        empty.textContent = line(num + " " + ".".repeat(IN - 3));
+        crate.append(empty);
+        continue;
+      }
+      const row = document.createElement("button"); row.type = "button"; row.className = "ascii-line ascii-rec";
+      row.textContent = line(num + " " + ascii(p.artist).toUpperCase() + " - " + ascii(p.album));
+      row.setAttribute("aria-label", "Record " + (i + 1) + ": " + p.artist + " — " + p.album);
+      row.setAttribute("aria-expanded", openCrateRecord === p.k ? "true" : "false");
+      row.onclick = () => { openCrateRecord = openCrateRecord === p.k ? null : p.k; renderCrate(); };
+      crate.append(row);
+      if (openCrateRecord === p.k) fillCrateDetail(panel, p);
+    }
+    const bottom = document.createElement("span"); bottom.className = "ascii-line";
+    bottom.textContent = "+" + "-".repeat(W - 2) + "+";
+    crate.append(bottom);
+    const wrap = document.createElement("div"); wrap.className = "crate-box";
+    wrap.append(crate, panel);
+    box.append(wrap);
   });
+}
+
+function fillCrateDetail(panel, p) {
+  panel.hidden = false;
+  const name = document.createElement("p"); name.className = "loved-name";
+  const b = document.createElement("b"); b.textContent = p.artist;
+  name.append(b, document.createTextNode(" — "), Object.assign(document.createElement("i"), { textContent: p.album }));
+  const meta = document.createElement("span"); meta.className = "meta"; meta.textContent = [p.year, p.label].filter(Boolean).join(" · ");
+  const why = document.createElement("p"); why.className = "why"; why.textContent = p.why || "";
+  const links = document.createElement("div"); links.className = "links";
+  links.append(
+    linkEl("YouTube", "https://www.youtube.com/results?search_query=" + q(p) + "+full+album"),
+    linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
+    linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
+    linkEl("Bandcamp", "https://bandcamp.com/search?q=" + q(p)),
+    linkEl("Discogs", "https://www.discogs.com/search/?type=all&q=" + q(p))
+  );
+  const rm = document.createElement("button"); rm.type = "button"; rm.className = "chip"; rm.textContent = "Remove from crate";
+  rm.onclick = () => {
+    delete reactions[p.k]; store.set("dc-reactions", reactions); openCrateRecord = null;
+    document.querySelectorAll(".chip[data-r='loved']").forEach((c) => { if (c.dataset.k === p.k) c.setAttribute("aria-pressed", "false"); });
+    renderCrate(); renderProfile(); renderHistory(); maybeAutoSummary();
+  };
+  panel.append(name);
+  if (meta.textContent) panel.append(meta);
+  if (why.textContent) panel.append(why);
+  panel.append(links, rm);
 }
 
 function renderHistory() {
