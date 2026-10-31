@@ -1305,6 +1305,15 @@ async function discogsItems(artist, title) {
     ? { value: x.artist + " \u2013 " + x.song, label: x.artist + " \u2013 " + x.song, meta: shortMeta("Song on " + x.title + (x.year ? " (" + x.year + ")" : "")) }
     : { value: x.artist + " \u2013 " + x.title, label: x.artist + " \u2013 " + x.title, meta: [x.year, x.format].filter(Boolean).join(" \u00b7 ") });
 }
+// Does an album's credited artist match what was typed? Every typed word (allowing a typo) must appear,
+// so "officer john" doesn't match "John Craigie".
+function artistMatches(typed, credit) {
+  const want = luc(typed).toLowerCase().split(" ").map(squash).filter((w) => w.length > 1);
+  const have = luc(credit).toLowerCase().split(" ").map(squash).filter(Boolean);
+  if (!want.length) return true;
+  if (squash(credit).includes(squash(typed))) return true;
+  return want.every((w) => have.some((h) => h === w || h.startsWith(w) || editDist(w, h) <= (w.length >= 5 ? 1 : 0)));
+}
 function rgItems(groups) {
   const seen = new Set();
   return (groups || []).filter((g) => (g.score || 0) >= 50 && ["Album", "EP"].includes(g["primary-type"]) && !(g["secondary-types"] || []).length)
@@ -1335,7 +1344,7 @@ async function runSuggest(input) {
     if (!b) return;
     const r = await mbQuick("release-group", { query: `releasegroup:(${prefixTerms(b)}) AND artist:(${fuzzyTerms(a)})`, limit: 10 });
     if (seq !== SUG.seq) return;
-    const found = rgItems(r?.["release-groups"]);
+    const found = rgItems((r?.["release-groups"] || []).filter((g) => artistMatches(a, creditName(g["artist-credit"]))));
     if (found.length) { showSuggest(input, found, "Albums on MusicBrainz"); return; }
     // Not on MusicBrainz (new or underground): try Discogs, which also finds songs on a record.
     const dz = await discogsItems(a, b);
@@ -1386,7 +1395,7 @@ async function checkCorrection(input) {
   let fix = "";
   if (b) {
     const r = await mbQuick("release-group", { query: `releasegroup:(${fuzzyTerms(b)}) AND artist:(${fuzzyTerms(a)})`, limit: 3 });
-    const g = (r?.["release-groups"] || []).find((x) => (x.score || 0) >= 80);
+    const g = (r?.["release-groups"] || []).find((x) => (x.score || 0) >= 80 && artistMatches(a, creditName(x["artist-credit"])));
     if (g) { const v = creditName(g["artist-credit"]) + " – " + g.title; if (squash(v) !== squash(text) || v.replace(/\s/g, "") !== text.replace(/\s/g, "")) fix = v; }
     if (!g) {
       const ar = await mbQuick("artist", { query: `artist:(${fuzzyTerms(a)})`, limit: 1 });
