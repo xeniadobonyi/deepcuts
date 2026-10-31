@@ -37,8 +37,14 @@ module.exports = async function handler(req, res) {
   const best = groups.find((g) => (g.score || 0) >= 85);
   if (!best) return reply(check ? 200 : 404, { found: false, cover: null }, "public, s-maxage=86400");
 
+  const credit = (best["artist-credit"] || []).map((c) => (c.name || c.artist?.name || "") + (c.joinphrase || "")).join("").trim();
   return reply(200, {
     found: true,
     cover: `https://coverartarchive.org/release-group/${best.id}/front-250`,
+    // MusicBrainz's own facts, so the page never has to show the AI's guesses
+    artist: credit || null,
+    title: best.title || null,
+    year: String(best["first-release-date"] || "").slice(0, 4) || null,
+    mbid: best.id,
   }, "public, s-maxage=2592000, stale-while-revalidate=86400");
 };

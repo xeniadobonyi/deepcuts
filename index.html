@@ -212,7 +212,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="past" id="past"></div>
   </section>
 
-  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice. Picks and details are AI-generated from music knowledge, so check credits on Discogs before quoting them.</p>
+  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice. Picks and details are AI-generated from music knowledge, so check credits on Discogs before quoting them. Album data from MusicBrainz. Covers from the Cover Art Archive.</p>
 </div>
 
 <script>
@@ -381,7 +381,10 @@ async function checkReal(list, step, want = 5) {
       const r = await fetch("/api/cover?check=1&artist=" + encodeURIComponent(p.artist) + "&album=" + encodeURIComponent(p.album), { signal: ctl?.signal });
       info = await r.json();
     } catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; }
-    if (info.found !== false && !out.some((g) => g.artist.toLowerCase() === p.artist.toLowerCase())) out.push({ ...p, verified: info.found === true, cover: info.cover || "" });
+    if (info.found !== false && !out.some((g) => g.artist.toLowerCase() === p.artist.toLowerCase())) {
+      // Facts shown on the page come from MusicBrainz, not from the AI.
+      out.push({ ...p, artist: info.artist || p.artist, album: info.title || p.album, year: info.year || "", label: "", rgId: info.mbid || "", verified: info.found === true, cover: info.cover || "" });
+    }
     if (i < list.length - 1 && out.length < want) await new Promise((r) => setTimeout(r, 1100));
   }
   return out;
@@ -579,6 +582,185 @@ const ERR = {
   overloaded: "Claude is busy right now. Wait a minute and press Dig again."
 };
 
+// ---------- Data-first digging ----------
+// For digs that start from records, candidates come from real MusicBrainz links:
+// the same label in the same years, the producers and engineers on the record, and related artists.
+// The AI then only chooses among them and explains, using the facts it is given.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+let mbLast = 0;
+async function mb(entity, params = {}) {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const wait = mbLast + 1100 - Date.now();
+    if (wait > 0) await sleep(wait);
+    mbLast = Date.now();
+    if (ctl?.signal.aborted) throw { code: "cancelled" };
+    let r;
+    try { r = await fetch("/api/mb?e=" + encodeURIComponent(entity) + "&" + new URLSearchParams(params), { signal: ctl?.signal }); }
+    catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; return null; }
+    if (r.ok) { try { return await r.json(); } catch { return null; } }
+    if (r.status !== 503) return null;
+    await sleep(1500);
+  }
+  return null;
+}
+const lc = (s) => String(s || "").toLowerCase().trim();
+const yearOf = (d) => String(d || "").slice(0, 4);
+const creditName = (ac) => (ac || []).map((c) => (c.name || c.artist?.name || "") + (c.joinphrase || "")).join("").trim();
+const noQuotes = (x) => String(x || "").replace(/["\\]/g, " ").trim();
+function splitSeed(s) {
+  const parts = String(s).split(/\s+[-\u2013\u2014]\s+|\s*[\u2013\u2014]\s*/).map((x) => x.trim()).filter(Boolean);
+  return parts.length >= 2 ? { artist: parts[0], album: parts.slice(1).join(" - ") } : { artist: String(s).trim(), album: "" };
+}
+
+async function gatherCandidates(seedList, onStep) {
+  const seeds = [], cands = new Map();
+  const few = seedList.length > 1; // with several records, follow fewer links per record to keep it quick
+  const add = (c, fact) => {
+    if (!c.artist || !c.album) return;
+    const k = lc(c.artist) + "|" + lc(c.album);
+    if (!cands.has(k)) cands.set(k, { ...c, facts: [] });
+    const e = cands.get(k);
+    if (!e.year && c.year) e.year = c.year;
+    if (!e.label && c.label) e.label = c.label;
+    if (!e.rgId && c.rgId) e.rgId = c.rgId;
+    if (fact && !e.facts.includes(fact)) e.facts.push(fact);
+  };
+  for (const raw of seedList) {
+    const { artist, album } = splitSeed(raw);
+    onStep("Looking up " + (album || artist) + "\u2026");
+    let rg = null, artistId = null, artistName = artist;
+    if (album) {
+      const sr = await mb("release-group", { query: `releasegroup:"${noQuotes(album)}" AND artist:"${noQuotes(artist)}"`, limit: 3 });
+      rg = (sr?.["release-groups"] || []).find((g) => (g.score || 0) >= 80) || null;
+    }
+    if (rg) { artistId = rg["artist-credit"]?.[0]?.artist?.id; artistName = rg["artist-credit"]?.[0]?.artist?.name || artist; }
+    else {
+      const ar = await mb("artist", { query: `artist:"${noQuotes(artist)}"`, limit: 1 });
+      const a = (ar?.artists || [])[0];
+      if (a && (a.score || 0) >= 85) { artistId = a.id; artistName = a.name; }
+    }
+    if (!artistId) continue;
+    const seed = { artist: artistName, album: rg?.title || album, year: yearOf(rg?.["first-release-date"]), artistId, country: "", tags: [], label: null };
+    seeds.push(seed);
+    const seedName = seed.artist + (seed.album ? " \u2013 " + seed.album : "");
+
+    // The artist: where they're from, their genres, and the artists they're linked to
+    const art = await mb("artist/" + artistId, { inc: "artist-rels+tags" });
+    seed.country = art?.area?.name || art?.country || "";
+    seed.tags = (art?.tags || []).slice().sort((a, b) => (b.count || 0) - (a.count || 0)).slice(0, 5).map((t) => t.name);
+    const seenRel = new Set();
+    const related = (art?.relations || []).filter((r) => r.artist && r.artist.id !== artistId && /member|collaboration|subgroup|is person|founder/i.test(r.type || "") && !seenRel.has(r.artist.id) && seenRel.add(r.artist.id)).slice(0, few ? 1 : 2);
+
+    // The record: its original label, and the producers and engineers who worked on it
+    if (rg) {
+      const rels = await mb("release", { "release-group": rg.id, inc: "labels", limit: 10 });
+      const list = (rels?.releases || []).slice().sort((a, b) => String(a.date || "9999").localeCompare(String(b.date || "9999")));
+      const first = list[0];
+      const li = (first?.["label-info"] || []).find((x) => x.label && !/no label/i.test(x.label.name || ""));
+      if (li) seed.label = { id: li.label.id, name: li.label.name };
+      if (first) {
+        const det = await mb("release/" + first.id, { inc: "artist-rels" });
+        const seenP = new Set();
+        const people = (det?.relations || []).filter((r) => r.artist && r.artist.id !== artistId && /producer|engineer|mix|arranger/i.test(r.type || "") && !seenP.has(r.artist.id) && seenP.add(r.artist.id)).slice(0, few ? 1 : 2);
+        for (const pr of people) {
+          onStep("Following " + pr.artist.name + "'s credits\u2026");
+          const pa = await mb("artist/" + pr.artist.id, { inc: "release-rels+artist-credits" });
+          for (const r of (pa?.relations || [])) {
+            if (!r.release || !/producer|engineer|mix|arranger/i.test(r.type || "")) continue;
+            const who = creditName(r.release["artist-credit"]);
+            if (!who) continue;
+            add({ artist: who, album: r.release.title, year: yearOf(r.release.date), label: "" },
+              `${pr.artist.name} worked on ${seedName} (${pr.type}) and on this record (${r.type})`);
+          }
+        }
+      }
+    }
+
+    // The label's catalogue from the same years
+    if (seed.label) {
+      onStep("Browsing the " + seed.label.name + " catalogue\u2026");
+      const lr = await mb("release", { label: seed.label.id, inc: "artist-credits+release-groups", limit: 100 });
+      for (const r of (lr?.releases || [])) {
+        const g = r["release-group"];
+        if (g && g["primary-type"] && g["primary-type"] !== "Album") continue;
+        if ((g?.["secondary-types"] || []).length) continue; // skip compilations, live albums, remixes
+        const y = yearOf(r.date || g?.["first-release-date"]);
+        if (seed.year && y && Math.abs(+y - +seed.year) > 6) continue;
+        add({ artist: creditName(r["artist-credit"]), album: g?.title || r.title, year: y, label: seed.label.name, rgId: g?.id || "" },
+          `Released on ${seed.label.name}, the same label as ${seedName}`);
+      }
+    }
+
+    // Albums by artists linked to this one: band members, collaborators, side projects
+    for (const rr of related) {
+      onStep("Checking " + rr.artist.name + "\u2026");
+      const gr = await mb("release-group", { artist: rr.artist.id, type: "album", limit: 25 });
+      for (const g of (gr?.["release-groups"] || []).filter((x) => !(x["secondary-types"] || []).length).slice(0, 8)) {
+        add({ artist: rr.artist.name, album: g.title, year: yearOf(g["first-release-date"]), label: "", rgId: g.id },
+          `${rr.artist.name} is linked to ${seed.artist} (${rr.type})`);
+      }
+    }
+  }
+  return { seeds, candidates: [...cands.values()] };
+}
+
+// Keep new artists only, put candidates linked to several records first, and keep the list varied.
+function rankCandidates(candidates, seeds, seedList) {
+  const seedArtists = new Set(seeds.map((x) => lc(x.artist)).concat(seedList.map((x) => lc(splitSeed(x).artist))));
+  const seen = new Set([...digHistory.flatMap((d) => d.picks.map(keyOf)), ...Object.keys(reactions)]);
+  const perArtist = {};
+  return candidates
+    .filter((c) => !seedArtists.has(lc(c.artist)) && !seen.has(keyOf(c)) && !/various artists/i.test(c.artist))
+    .sort((a, b) => b.facts.length - a.facts.length)
+    .filter((c) => { const k = lc(c.artist); perArtist[k] = (perArtist[k] || 0) + 1; return perArtist[k] <= 2; })
+    .slice(0, 45);
+}
+
+function buildDataPrompt(seeds, mood, pool) {
+  const many = seeds.length > 1;
+  return [
+    "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
+    "The listener loves these records. Facts from MusicBrainz:",
+    ...seeds.map((x) => "- " + x.artist + (x.album ? " \u2013 " + x.album : "") + " (" + [x.year, x.country, x.label?.name].filter(Boolean).join(", ") + (x.tags.length ? "; genres: " + x.tags.join(", ") : "") + ")"),
+    mood ? "They also searched for: \"" + mood + "\". Every pick must clearly match it." : "",
+    many ? "First work out what these records have in common: country, language, scene, era, genre or label. Favour candidates that share it." : "",
+    "Candidate albums, each with the real connection found in MusicBrainz:",
+    ...pool.map((c, i) => (i + 1) + ". " + c.artist + " \u2013 " + c.album + (c.year ? " (" + c.year + ")" : "") + ": " + c.facts.join("; ")),
+    "Rules:",
+    "- Choose exactly 5 candidates, by number, from this list only. 5 different artists.",
+    "- Prefer the most rewarding discoveries: lesser-known albums over famous ones, proper studio albums over reissues.",
+    "- The connection you describe must come from the facts listed for that candidate. Do not add credits, samples, labels or places that are not listed. You may describe how the record sounds.",
+    many
+      ? "- Order from strongest match to weakest. The first pick is the candidate that best sits in the common ground of all the records; its \"why\" names every one of the records, and its \"thread\" is \"Common ground\"."
+      : "- Order from strongest match to weakest.",
+    "- \"why\": 2 or 3 plain, specific sentences to the listener. Start with \"Because you love <one of their records>,\" then give the connection from the facts, then say what the record sounds like and what they will get from it.",
+    "- \"thread\": 2 to 3 words naming the connection, e.g. \"Same producer\", \"Same label\", \"Band member\", \"Common ground\".",
+    'Reply with only a JSON array: [{"id": number, "thread": string, "why": string}]'
+  ].filter(Boolean).join("\n");
+}
+
+function pickFromPool(res, pool) {
+  let arr = res;
+  if (!Array.isArray(arr) && arr && typeof arr === "object") arr = Object.values(arr).find(Array.isArray) || [];
+  if (!Array.isArray(arr)) return [];
+  const out = [], artists = new Set();
+  for (const o of arr) {
+    if (!o || typeof o !== "object") continue;
+    const id = Number(o.id ?? o.number ?? o.candidate ?? o.index);
+    const c = pool[id - 1];
+    if (!c || artists.has(lc(c.artist))) continue;
+    artists.add(lc(c.artist));
+    out.push({
+      artist: c.artist, album: c.album, year: c.year || "", label: c.label || "",
+      thread: String(o.thread || "").trim(), why: String(o.why || o.reason || "").trim(),
+      rgId: c.rgId || "", cover: c.rgId ? "https://coverartarchive.org/release-group/" + c.rgId + "/front-250" : "",
+      verified: c.rgId ? true : null
+    });
+    if (out.length === 5) break;
+  }
+  return out;
+}
+
 $("digForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const seedList = seeds().map((s) => s.value.trim()).filter(Boolean).slice(0, MAX_SEEDS);
@@ -604,11 +786,32 @@ $("digForm").addEventListener("submit", async (e) => {
     }
   };
   try {
-    // On the public site every pick is checked against MusicBrainz, so ask for spares.
+    // On the public site every pick is checked against MusicBrainz.
     const verify = !!API_URL && !sample;
+    let picks = [], fromData = false;
+    if (verify && seedList.length) {
+      // Records given: find real candidates through MusicBrainz links, then let the AI choose and explain.
+      try {
+        const { seeds: seedInfo, candidates } = await gatherCandidates(seedList, (msg) => setStatus(msg));
+        const pool = rankCandidates(candidates, seedInfo, seedList);
+        if (pool.length >= 8) {
+          setStatus("Choosing the best five from " + pool.length + " real connections\u2026");
+          target = 5;
+          let res;
+          try { res = await askClaude(buildDataPrompt(seedInfo, mood, pool), { signal: ctl.signal, onText }); }
+          catch (e2) { if (e2?.code !== "invalid_json") throw e2; }
+          picks = res ? pickFromPool(res, pool) : [];
+          fromData = picks.length >= 3;
+        }
+      } catch (e2) {
+        if (e2?.code === "cancelled") throw e2;
+        console.error("Data dig failed, falling back", e2);
+      }
+      if (!fromData) { picks = []; found = 0; setStatus("Digging through the crates\u2026"); }
+    }
+    if (!fromData) {
     target = verify ? 8 : 5;
     const prompt = buildPrompt(seedList, mood, target);
-    let picks = [];
     try { picks = normalizePicks(await askClaude(prompt, { signal: ctl.signal, onText })); }
     catch (e) { if (e?.code !== "invalid_json") throw e; }
     if (!picks.length) {
@@ -632,6 +835,7 @@ $("digForm").addEventListener("submit", async (e) => {
       dropped = Math.max(0, 5 - good.length);
       picks = good.slice(0, 5);
     } else picks = picks.slice(0, 5);
+    }
     bar.style.width = "100%";
     if (limited()) countDig();
     current = { picks, seeds: seedList, mood };
@@ -642,7 +846,9 @@ $("digForm").addEventListener("submit", async (e) => {
     renderHistory();
     renderProfile();
     render(picks, false, true);
-    setStatus((dropped ? "Only " + picks.length + " records could be confirmed as real albums, so that\u2019s all this dig shows. " : (verify ? "Five real records dug, each checked on MusicBrainz. " : "Five records dug. ")) + digsLeftNote());
+    setStatus((fromData ? picks.length + " real records, each found through MusicBrainz credits and labels. "
+      : dropped ? "Only " + picks.length + " records could be confirmed as real albums, so that\u2019s all this dig shows. "
+      : verify ? "Five real records dug, each checked on MusicBrainz. " : "Five records dug. ") + digsLeftNote());
     $("digBtn").textContent = "Dig again";
   } catch (err) {
     if (err?.code === "cancelled") setStatus("Stopped.");
