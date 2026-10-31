@@ -54,6 +54,8 @@ input[type=text], #apiKey {
 input[type=text]:hover, #apiKey:hover { border-color: var(--fg); }
 input[type=text]:focus, #apiKey:focus { outline: 2px solid var(--link); outline-offset: 1px; border-color: var(--fg); }
 input[type=text]::placeholder, #apiKey::placeholder { color: var(--muted); opacity: 1; }
+input.seed-optional { border-style: dashed; background: transparent; }
+input.seed-optional::placeholder { font-style: italic; font-size: 15px; }
 button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
 .seed-list { display: flex; flex-direction: column; gap: 8px; }
 .add-seed { align-self: flex-start; margin-top: 2px; }
@@ -319,6 +321,17 @@ function addSeedField(value, focus) {
   if (focus) inp.focus();
 }
 $("addSeed").onclick = () => addSeedField("", true);
+// Example records show only while the form is empty. Once something is typed, empty fields become
+// dashed "optional" slots, so they don't look like part of the search.
+function updateSeedHints() {
+  const list = seeds(), started = list.some((x) => x.value.trim());
+  list.forEach((inp, i) => {
+    const empty = !inp.value.trim();
+    inp.placeholder = !started ? SEED_EXAMPLES[i] || "" : empty ? "Optional: add another record" : "";
+    inp.classList.toggle("seed-optional", started && empty);
+  });
+}
+$("seedList").addEventListener("input", updateSeedHints);
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
@@ -1161,6 +1174,7 @@ function digFromRecords(recs) {
   const list = recs.slice(0, MAX_SEEDS).map((r) => r.artist + " \u2013 " + r.album);
   while (seeds().length < list.length) addSeedField("");
   seeds().forEach((inp, i) => { inp.value = list[i] || ""; });
+  updateSeedHints();
   $("digForm").scrollIntoView({ behavior: "smooth", block: "start" });
   const form = $("digForm");
   if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event("submit", { cancelable: true }));
@@ -1250,7 +1264,7 @@ function moveSuggest(d) {
 function chooseSuggest(i) {
   const it = SUG.items[i], input = SUG.input;
   if (!it || !input) return;
-  input.value = it.value; input.dataset.picked = it.value;
+  input.value = it.value; input.dataset.picked = it.value; updateSeedHints();
   clearCorrection(input);
   closeSuggest();
   if (it.artistId) showArtistAlbums(input, it);
@@ -1343,7 +1357,7 @@ async function checkCorrection(input) {
   if (!fix || input.value.trim() !== text || fix === text) return;
   const hint = document.createElement("p"); hint.className = "didyoumean";
   const btn = document.createElement("button"); btn.type = "button"; btn.className = "didyoumean-btn"; btn.textContent = fix;
-  btn.onclick = () => { input.value = fix; input.dataset.picked = fix; hint.remove(); input.focus(); };
+  btn.onclick = () => { input.value = fix; input.dataset.picked = fix; hint.remove(); updateSeedHints(); input.focus(); };
   hint.append("Did you mean ", btn, "?");
   input.after(hint);
 }
@@ -1519,6 +1533,7 @@ $("digDeeper").onclick = () => {
   else {
     while (seeds().length < list.length) addSeedField("");
     seeds().forEach((inp, i) => { inp.value = list[i] || ""; });
+    updateSeedHints();
   }
   deeperNext = true; // new picks go below the current ones, with the progress bar under them
   const form = $("digForm");
@@ -1532,6 +1547,7 @@ const saved = store.get("dc-form", null);
 $("modeRecords").checked = true;
 setDigMode();
 while (seeds().length < MAX_SEEDS) addSeedField(""); // all three fields, each with its example
+updateSeedHints();
 const shortDate = (iso) => { try { return iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : ""; } catch { return ""; } };
 if (current?.picks?.length) {
   render(current.picks, false, false);
