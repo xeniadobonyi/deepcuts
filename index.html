@@ -571,7 +571,7 @@ function render(picks, isExample, fresh, append) {
       rarity = document.createElement("p"); rarity.className = "rarity";
       // RARITY ▮▮▮▮▯  Discogs 312 own / 540 want: five bars, fewer owners means more bars
       const h = p.dc.have, bars = rarityBars(p.dc);
-      const lab = document.createElement("span"); lab.className = "rarity-label"; lab.textContent = "RARITY ";
+      const lab = document.createElement("span"); lab.className = "rarity-label"; lab.textContent = (tierOf(p) ? TIER_NAMES[tierOf(p)].toUpperCase() + " \u00b7 " : "") + "RARITY ";
       const on = document.createElement("span"); on.className = "rarity-on"; on.textContent = "\u25ae".repeat(bars);
       const off = document.createElement("span"); off.className = "rarity-off"; off.textContent = "\u25af".repeat(5 - bars);
       const nums = document.createElement("span"); nums.className = "rarity-nums";
@@ -671,7 +671,9 @@ function buildPrompt(seedList, mood, count = 5, avoid = []) {
     "Never recommend any of these exact albums, they already know them: " + [...seedList, ...known, ...nope, ...previous, ...avoid].join("; "),
     "Rules:",
     digDepth > 0 ? "- This is a deeper dig: go further underground than usual, only records few collectors own." : "",
-    "- Only real, released albums. Favour lesser-known records, deep cuts and underrated albums over famous classics.",
+    digDepth === 0
+      ? "- Only real, released albums, and every one must be excellent. Mix fame levels: 2 or 3 acclaimed landmark albums that are among the very best in this style, and the rest lesser-known records that serious diggers love. List the picks best first."
+      : "- Only real, released albums, and every one must be excellent. Favour lesser-known records, deep cuts and underrated albums over famous classics.",
     "- Every album must be a real release you could find on Discogs or MusicBrainz under exactly this artist name and album title. If you are not certain an album exists, leave it out. Never combine a real artist with a made-up title.",
     hasWords
       ? "- For each pick, name the specific, real quality that makes it match the search: where and when it was made, its scene, its sound or instrumentation."
@@ -1013,14 +1015,15 @@ function buildDataPrompt(seeds, mood, pool) {
     mood ? "They also searched for: \"" + mood + "\". Every pick must clearly match it." : "",
     many ? "First work out what these records have in common: country, language, scene, era, genre or label. Favour candidates that share it." : "",
     "Candidate albums, each with the real connection found in MusicBrainz:",
-    ...pool.map((c, i) => (i + 1) + ". " + c.artist + " \u2013 " + c.album + (c.year ? " (" + c.year + ")" : "") + (many ? " [linked to record " + (c.from || [0]).map((x) => x + 1).join(" and ") + "]" : "") + ": " + c.facts.join("; ") + (c.dc ? " [Discogs: " + c.dc.have + " own it, " + c.dc.want + " want it]" : "")),
+    ...pool.map((c, i) => (i + 1) + ". " + c.artist + " \u2013 " + c.album + (c.year ? " (" + c.year + ")" : "") + (many ? " [linked to record " + (c.from || [0]).map((x) => x + 1).join(" and ") + "]" : "") + ": " + c.facts.join("; ") + (tierOf(c) ? " [" + TIER_NAMES[tierOf(c)] + ": " + c.dc.have + " own it, " + c.dc.want + " want it on Discogs]" : "")),
     "Rules:",
-    "- Choose exactly 5 candidates, by number, from this list only. 5 different artists.",
+    "- Choose 8 candidates, by number, from this list only, ranked best first. 8 different artists.",
+    pool.some((c) => tierOf(c)) ? "- The listener gets a mix of kinds: " + Object.entries(mixNow()).filter(([, n]) => n).map(([t, n]) => n + " " + TIER_NAMES[t]).join(", ") + ". Among your 8, include at least that many of each kind where the list has them. Within each kind, choose the most accomplished records: the ones critics and collectors rate highest. Never choose a weak record just because it is rare or famous." : "",
     many ? "- Balance the picks across the listener's records: include at least one candidate linked to each record (record 1, record 2" + (seeds.length > 2 ? ", record 3" : "") + "). Never take more than 2 picks linked only to the same record." : "",
     pool.some((c) => c.sample) ? "- Candidates marked \"Sample source\" are the original records the listener's music samples: include at least one of them, and say which track samples it." : "",
     digDepth > 0 ? "- This is a deeper dig: favour the most obscure candidates, the ones fewest people own." : "",
-    "- Prefer the most rewarding discoveries: lesser-known albums over famous ones, proper studio albums over reissues.",
-    pool.some((c) => c.dc) ? "- Where Discogs counts are given, prefer records few people own, especially ones more people want than own: those are the real deep cuts. Do not mention the counts in your text." : "",
+    "- Prefer the most rewarding discoveries and proper studio albums over reissues.",
+    pool.some((c) => tierOf(c)) ? "- Do not mention the Discogs counts or the kind in your text." : "- Favour lesser-known albums over famous ones.",
     "- The connection you describe must come from the facts listed for that candidate. Do not add credits, samples, labels or places that are not listed. You may describe how the record sounds.",
     many
       ? "- Order from strongest match to weakest. The first pick is the candidate that best sits in the common ground of all the records; its \"why\" mentions what links it to all of the records, and its \"thread\" is \"Common ground\"."
@@ -1031,7 +1034,7 @@ function buildDataPrompt(seeds, mood, pool) {
   ].filter(Boolean).join("\n");
 }
 
-function pickFromPool(res, pool) {
+function pickFromPool(res, pool, max = 5) {
   let arr = res;
   if (!Array.isArray(arr) && arr && typeof arr === "object") arr = Object.values(arr).find(Array.isArray) || [];
   if (!Array.isArray(arr)) return [];
@@ -1049,7 +1052,7 @@ function pickFromPool(res, pool) {
       verified: c.rgId || c.dcId ? true : null,
       dc: c.dc || (c.dcId ? { url: "https://www.discogs.com/release/" + c.dcId, have: 0, want: 0, at: 0 } : null)
     });
-    if (out.length === 5) break;
+    if (out.length === max) break;
   }
   return out;
 }
@@ -1079,15 +1082,26 @@ async function discogsRarity(list, max = 20) {
   if (ctl?.signal.aborted) throw { code: "cancelled" };
   return any;
 }
-// Each "Dig deeper" round lowers the owner limit, so the rabbit hole gets rarer as you go.
-const DEPTH_LIMITS = [MAINSTREAM_HAVE, 3000, 1000, 400];
+// Every dig mixes three kinds of record, judged by how many Discogs members own it:
+// Essential (acclaimed landmarks, 3,000+ owners), Digger favourite (1,000–3,000), Deep cut (under 1,000).
+// Each "Dig deeper" round swaps familiar kinds for deeper ones.
+const TIER_NAMES = { essential: "Essential", favourite: "Digger favourite", deep: "Deep cut" };
+const TIER_ORDER = ["essential", "favourite", "deep", ""];
+const tierOf = (c) => (!c?.dc || !c.dc.at ? "" : c.dc.many || c.dc.have >= 3000 ? "essential" : c.dc.have >= 1000 ? "favourite" : "deep");
+const MIXES = [{ essential: 1, favourite: 2, deep: 2 }, { essential: 0, favourite: 2, deep: 3 }, { essential: 0, favourite: 1, deep: 4 }];
+const mixNow = () => MIXES[Math.min(digDepth, MIXES.length - 1)];
+// Take a best-first list and choose five that follow the mix. Shortfalls are filled with the next best record,
+// deeper kinds first. The rest follow as backups (used if a record can't be confirmed).
+function selectMix(list, n = 5) {
+  const mix = mixNow(), chosen = [];
+  for (const t of ["essential", "favourite", "deep"]) chosen.push(...list.filter((c) => tierOf(c) === t).slice(0, mix[t]));
+  for (const t of ["deep", "favourite", "", "essential"]) for (const c of list) { if (chosen.length >= n) break; if (tierOf(c) === t && !chosen.includes(c)) chosen.push(c); }
+  chosen.sort((a, b) => TIER_ORDER.indexOf(tierOf(a)) - TIER_ORDER.indexOf(tierOf(b))); // familiar first, then down the rabbit hole
+  return chosen.concat(list.filter((c) => !chosen.includes(c)));
+}
 let digDepth = 0;
-const ownerLimit = () => DEPTH_LIMITS[Math.min(digDepth, DEPTH_LIMITS.length - 1)];
-const isMainstream = (c) => !!c.dc && (c.dc.many || c.dc.have > ownerLimit());
 // Few owners, and more people wanting it than owning it: the digger's sweet spot.
 const rarityBonus = (c) => (!c.dc ? 0 : (c.dc.have < 1500 ? 1 : 0) + (c.dc.want > c.dc.have ? 1 : 0) - (c.dc.have > 4000 ? 1 : 0));
-// Leave out mainstream records when enough others remain.
-const dropMainstream = (list, keep) => { const rare = list.filter((c) => !isMainstream(c)); return rare.length >= keep ? rare : list; };
 const rarityBars = (dc) => { if (!dc || !dc.at) return 0; // no counts yet (just a Discogs link)
   const h = dc.have || 0; return dc.many ? 1 : h < 250 ? 5 : h < 1000 ? 4 : h < 3000 ? 3 : h < 8000 ? 2 : 1; };
 const dcFresh = (dc) => !!dc && Date.now() - (dc.at || 0) < DC_FRESH_MS;
@@ -1483,16 +1497,22 @@ $("digForm").addEventListener("submit", async (e) => {
         if (pool.length >= 5) {
           setStatus("Checking how rare each record is on Discogs\u2026");
           if (await discogsRarity(pool, 30)) {
-            // Rare records first, among those with the strongest links.
-            pool = dropMainstream(pool, 5).map((c, i) => [c, i])
-              .sort((a, b) => (b[0].facts.length + rarityBonus(b[0])) - (a[0].facts.length + rarityBonus(a[0])) || a[1] - b[1]).map((x) => x[0]);
+            // Keep only the most wanted famous records (the best landmarks), then strongest links first.
+            const ess = pool.filter((c) => tierOf(c) === "essential").sort((a, b) => (b.dc.want || 0) - (a.dc.want || 0)).slice(0, 6);
+            pool = pool.filter((c) => tierOf(c) !== "essential" || ess.includes(c));
+            // Lay the list out so every stretch of it holds each kind, strongest links first within each kind.
+            const kinds = ["essential", "favourite", "deep", ""].map((t) => pool.filter((c) => tierOf(c) === t)
+              .map((c, i) => [c, i]).sort((a, b) => (b[0].facts.length + rarityBonus(b[0])) - (a[0].facts.length + rarityBonus(a[0])) || a[1] - b[1]).map((x) => x[0]));
+            const mixed = [];
+            for (let r = 0; mixed.length < pool.length; r++) for (const k of kinds) if (k[r]) mixed.push(k[r]);
+            pool = mixed;
           }
           setStatus("Choosing the best five from " + pool.length + " real connections\u2026");
-          target = 5;
+          target = 8;
           let res;
           try { res = await askClaude(buildDataPrompt(seedInfo, mood, pool), { signal: ctl.signal, onText }); }
           catch (e2) { if (e2?.code !== "invalid_json") throw e2; }
-          picks = res ? pickFromPool(res, pool) : [];
+          picks = res ? selectMix(pickFromPool(res, pool, 8)).slice(0, 5) : [];
           fromData = picks.length >= 3;
         }
       } catch (e2) {
@@ -1515,8 +1535,8 @@ $("digForm").addEventListener("submit", async (e) => {
     if (verify) {
       setStatus("Checking how rare each record is on Discogs\u2026");
       if (await discogsRarity(picks, 10)) {
-        let rare = picks.filter((p) => !isMainstream(p));
-        if (rare.length < 5) {
+        const mix = mixNow();
+        if (picks.filter((p) => tierOf(p) !== "essential").length < mix.favourite + mix.deep) {
           // Too many well-known records: ask once more for deeper cuts, leaving out everything already suggested.
           setStatus("Too many well-known records. Digging further down\u2026");
           let more = [];
@@ -1524,11 +1544,9 @@ $("digForm").addEventListener("submit", async (e) => {
           catch (e2) { if (e2?.code !== "invalid_json") throw e2; }
           more = more.filter((m) => !picks.some((p) => lc(p.artist) === lc(m.artist)));
           await discogsRarity(more, 10);
-          rare = rare.concat(more.filter((p) => !isMainstream(p)));
-          // Still short: fill with the least-owned of the rest.
-          if (rare.length < 5) rare = rare.concat(picks.concat(more).filter((p) => isMainstream(p)).sort((a, b) => (a.dc?.have || 0) - (b.dc?.have || 0)));
+          picks = picks.concat(more);
         }
-        picks = rare;
+        picks = selectMix(picks);
       }
       checkReal.busy = 0;
       setStatus("Checking each record is a real album\u2026");
