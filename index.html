@@ -225,7 +225,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     </fieldset>
     <fieldset id="vibeFs" hidden>
       <legend class="label">Keywords, a mood or a moment</legend>
-      <input type="text" id="mood" aria-label="Keywords, a mood or a moment" placeholder="e.g. California sunny 70s, Brazilian jazz, rainy Sunday" autocomplete="off">
+      <input type="text" id="mood" aria-label="Keywords, a mood or a moment" placeholder="e.g. Turkish psych, early 70s" autocomplete="off">
     </fieldset>
     <div class="actions">
       <button class="btn" type="submit" id="digBtn">Dig for five</button>
@@ -298,6 +298,13 @@ const EXAMPLE = {
 
 const $ = (id) => document.getElementById(id);
 const MAX_SEEDS = 3;
+// A different niche vibe as the example each visit (short enough to fit a phone).
+const VIBE_EXAMPLES = [
+  "Turkish psych, early 70s", "Balearic house, Ibiza 1990", "Soviet jazz-funk", "Tokyo city pop at night",
+  "Lagos Afro-funk, 70s", "Italo disco, empty dancefloor", "Brazilian samba-jazz, 60s", "Zouk love songs, 80s",
+  "French library music", "Spiritual jazz at sunrise", "Minimal wave, cold and dark", "Ethiopian jazz, 70s"
+];
+try { document.getElementById("mood").placeholder = "e.g. " + VIBE_EXAMPLES[Math.floor(Math.random() * VIBE_EXAMPLES.length)]; } catch {}
 // Shown as placeholders in the three record fields, in this order.
 const SEED_EXAMPLES = [
   "Bill Evans – Sunday at the Village Vanguard",
