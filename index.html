@@ -163,11 +163,11 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .dig-deeper { align-self: flex-start; margin-top: 4px; }
 .suggest { list-style: none; margin: -4px 0 0; padding: 0; border: 1px solid var(--fg); border-radius: 3px; background: var(--surface); max-height: 300px; overflow-y: auto; }
 .suggest-head { padding: 6px 12px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--rule); }
-.suggest-opt { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 12px; min-height: 44px; box-sizing: border-box; cursor: pointer; font-size: 15px; }
+.suggest-opt { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 12px; padding: 10px 12px; min-height: 44px; box-sizing: border-box; cursor: pointer; font-size: 15px; }
 .suggest-opt + .suggest-opt { border-top: 1px solid var(--rule); }
 .suggest-opt:hover, .suggest-opt[aria-selected="true"] { background: var(--fg); color: var(--bg); }
-.suggest-opt span:first-child { min-width: 0; overflow-wrap: anywhere; }
-.suggest-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.suggest-opt span:first-child { flex: 1 1 14ch; min-width: 0; overflow-wrap: break-word; }
+.suggest-meta { flex: 0 1 auto; max-width: 100%; font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .suggest-opt:hover .suggest-meta, .suggest-opt[aria-selected="true"] .suggest-meta { color: var(--bg); }
 .didyoumean { margin: -2px 0 0; font-size: 14px; color: var(--fg); }
 .didyoumean-btn { font: inherit; font-weight: 700; background: none; border: 0; padding: 0; color: var(--link); text-decoration: underline; cursor: pointer; }
@@ -202,7 +202,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <fieldset id="recordsFs">
       <legend class="label">Up to three things you love: an album, a song or an artist</legend>
       <div class="seed-list" id="seedList">
-        <input type="text" id="seed1" aria-label="Record 1" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="e.g. Madvillain – Madvillainy" autocomplete="off">
+        <input type="text" id="seed1" aria-label="Record 1" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="e.g. Madvillain – Madvillainy" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       </div>
       <button type="button" class="btn ghost add-seed" id="addSeed">+ Add another record</button>
     </fieldset>
@@ -297,7 +297,8 @@ function addSeedField(value, focus) {
   const n = seeds().length;
   if (n >= MAX_SEEDS) return;
   const inp = document.createElement("input");
-  inp.type = "text"; inp.id = "seed" + (n + 1); inp.autocomplete = "off";
+  inp.type = "text"; inp.id = "seed" + (n + 1); inp.autocomplete = "off"; inp.spellcheck = false;
+  inp.setAttribute("autocorrect", "off"); inp.setAttribute("autocapitalize", "off");
   inp.setAttribute("aria-label", "Record " + (n + 1));
   inp.setAttribute("role", "combobox"); inp.setAttribute("aria-autocomplete", "list"); inp.setAttribute("aria-expanded", "false");
   inp.placeholder = SEED_EXAMPLES[n] || "";
@@ -700,7 +701,7 @@ async function gatherCandidates(seedList, onStep) {
     if (fact && !e.facts.includes(fact)) e.facts.push(fact);
   };
   for (const raw of seedList) {
-    const { artist, album } = splitSeed(raw);
+    let { artist, album } = splitSeed(raw);
     onStep("Looking up " + (album || artist) + "\u2026");
     // An entry can be "artist - album", "artist - song", or just an artist.
     // Find the artist first, forgiving spelling and punctuation ("corto alto" finds "Corto.Alto").
@@ -714,7 +715,15 @@ async function gatherCandidates(seedList, onStep) {
     };
     let ar = await mb("artist", { query: `artist:"${noQuotes(artist)}"`, limit: 5 });
     let a = pickArtist(ar?.artists);
-    if (!a) { ar = await mb("artist", { query: noQuotes(artist), limit: 5 }); a = pickArtist(ar?.artists); }
+    if (!a) {
+      ar = await mb("artist", { query: `artist:(${fuzzyTerms(artist)})`, limit: 5 });
+      a = pickArtist(ar?.artists);
+      if (!a) {
+        const hit = artistPrefix(artist, ar?.artists);
+        // Without a dash, the words after the artist's name are the album or song.
+        if (hit && (!album || !hit.rest)) { a = hit.artist; if (!album && hit.rest) album = hit.rest; }
+      }
+    }
     if (a) { artistId = a.id; artistName = a.name; }
     if (album) {
       const by = artistId ? `arid:${artistId}` : `artist:"${noQuotes(artist)}"`;
@@ -932,6 +941,31 @@ const fuzzyTerms = (t) => luc(t).split(" ").filter(Boolean).map((w) => (w.length
 const prefixTerms = (t) => { const ws = luc(t).split(" ").filter(Boolean); return ws.map((w, i) => (i === ws.length - 1 && w.length > 1 ? w + "*" : w)).join(" "); };
 const squash = (x) => lc(x).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
 const DASH_RE = /\s+[-–—]\s*|\s*[–—]\s*/;
+const shortMeta = (t) => (t.length > 42 ? t.slice(0, 40).trimEnd() + "…" : t);
+function editDist(a, b) {
+  if (Math.abs(a.length - b.length) > 3) return 99;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[b.length];
+}
+// "Labbi siffre chase" → { artist: Labi Siffre, rest: "chase" }. The artist's name (or an alias),
+// allowing a typo or two, must make up the first words; the rest is an album or a song.
+function artistPrefix(text, artists) {
+  const ws = luc(text).split(" ").filter(Boolean);
+  for (const x of artists || []) {
+    const names = [x.name, ...(x.aliases || []).map((al) => al.name)].map(squash).filter(Boolean);
+    for (let k = ws.length; k >= 1; k--) {
+      const p = squash(ws.slice(0, k).join(" "));
+      if (p.length < 3) continue;
+      if (names.some((n) => editDist(p, n) <= (n.length >= 8 ? 2 : n.length >= 5 ? 1 : 0))) return { artist: x, rest: ws.slice(k).join(" ") };
+    }
+  }
+  return null;
+}
 
 function sugBox() {
   if (!SUG.box) {
@@ -1012,8 +1046,26 @@ async function runSuggest(input) {
   }
   const ar = await mbQuick("artist", { query: `artist:(${fuzzyTerms(text)}) OR artist:(${prefixTerms(text)})`, limit: 4 });
   if (seq !== SUG.seq) return;
-  const artists = (ar?.artists || []).filter((x) => (x.score || 0) >= 60).slice(0, 3)
-    .map((x) => ({ value: x.name, label: x.name, meta: ["Artist", x.disambiguation || x.area?.name || ""].filter(Boolean).join(" · "), artistId: x.id, name: x.name }));
+  const artistItem = (x) => ({ value: x.name, label: x.name, meta: shortMeta(["Artist", x.disambiguation || x.area?.name || ""].filter(Boolean).join(" · ")), artistId: x.id, name: x.name });
+  const hit = artistPrefix(text, ar?.artists);
+  if (hit && hit.rest) {
+    // "Labbi siffre chase": the artist, then their albums and songs that start with the rest.
+    const who = hit.artist.name, id = hit.artist.id;
+    showSuggest(input, [artistItem(hit.artist)], "Did you mean " + who + "?");
+    const rgs = await mbQuick("release-group", { query: `releasegroup:(${prefixTerms(hit.rest)}) AND arid:${id}`, limit: 5 });
+    if (seq !== SUG.seq) return;
+    const recs = await mbQuick("recording", { query: `recording:(${prefixTerms(hit.rest)}) AND arid:${id}`, limit: 10 });
+    if (seq !== SUG.seq) return;
+    const seen = new Set();
+    const albums = rgItems(rgs?.["release-groups"]).slice(0, 3);
+    albums.forEach((x) => seen.add(squash(x.value)));
+    const songs = (recs?.recordings || []).filter((r) => (r.score || 0) >= 50)
+      .map((r) => ({ value: who + " – " + r.title, label: who + " – " + r.title, meta: "Song" }))
+      .filter((x) => !seen.has(squash(x.value)) && seen.add(squash(x.value))).slice(0, 3);
+    showSuggest(input, [artistItem(hit.artist), ...albums, ...songs], "Did you mean " + who + "?");
+    return;
+  }
+  const artists = (hit ? [hit.artist] : (ar?.artists || []).filter((x) => (x.score || 0) >= 60).slice(0, 3)).map(artistItem);
   showSuggest(input, artists, "Artists");
   const rg = await mbQuick("release-group", { query: `releasegroup:(${prefixTerms(text)})`, limit: 10 });
   if (seq !== SUG.seq) return;
@@ -1039,9 +1091,10 @@ async function checkCorrection(input) {
       if (x && (x.score || 0) >= 85 && x.name !== a) fix = x.name + " – " + b;
     }
   } else {
-    const ar = await mbQuick("artist", { query: `artist:(${fuzzyTerms(a)})`, limit: 1 });
-    const x = (ar?.artists || [])[0];
-    if (x && (x.score || 0) >= 85 && x.name !== a) fix = x.name;
+    const ar = await mbQuick("artist", { query: `artist:(${fuzzyTerms(a)})`, limit: 3 });
+    const hit = artistPrefix(a, ar?.artists);
+    if (hit) fix = hit.artist.name + (hit.rest ? " – " + text.split(/\s+/).slice(-hit.rest.split(" ").length).join(" ") : "");
+    else { const x = (ar?.artists || [])[0]; if (x && (x.score || 0) >= 95 && x.name !== a) fix = x.name; }
   }
   if (!fix || input.value.trim() !== text || fix === text) return;
   const hint = document.createElement("p"); hint.className = "didyoumean";
