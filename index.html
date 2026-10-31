@@ -261,10 +261,13 @@ if (!digHistory.length && current?.picks?.length) digHistory = [{ date: null, se
 let sample = null;
 let ctl = null;
 
-// Where live digs come from: Claude inside claude.ai, the Deep Cuts server (API_URL), or a Claude API key saved in this browser.
-const API_URL = ""; // set to the deployed server URL, e.g. "https://deepcuts-api.<account>.workers.dev"
+// Where live digs come from: Claude inside claude.ai, or the Deep Cuts server at /api/dig when the site runs on Vercel.
+// A browser-saved API key is an owner-only test path, shown only at #connect.
+const SERVER_HOSTS = [".vercel.app"]; // add a custom domain here, e.g. "deepcuts.fm"
+const API_URL = SERVER_HOSTS.some((h) => location.hostname === h.replace(/^\./, "") || location.hostname.endsWith(h)) ? "/api/dig" : "";
+const OWNER_TEST = location.hash === "#connect";
 const MODEL = "claude-sonnet-5-5";
-const getKey = () => store.get("dc-api-key", "");
+const getKey = () => (OWNER_TEST ? store.get("dc-api-key", "") : "");
 const aiReady = () => !!(sample || API_URL || getKey());
 
 function parseJSONLoose(t) {
@@ -313,7 +316,7 @@ async function askClaude(prompt, { signal, onText } = {}) {
 
 function renderKeyBox() {
   const box = $("keyBox");
-  box.hidden = !!sample || !!API_URL;
+  box.hidden = !!sample || !!API_URL || !OWNER_TEST;
   if (box.hidden) return;
   const has = !!getKey();
   $("apiKey").hidden = has; $("apiKey").value = "";
@@ -436,7 +439,7 @@ const ERR = {
   invalid_json: "The dig came back in the wrong shape. Press Dig again.",
   refused: "That request couldn't be answered. Try different records.",
   sampling_disabled: "Claude isn't available for this account, so only the sample dig is shown.",
-  no_ai: "Live digs need a connection to Claude. Paste an API key in Connect Claude, below.",
+  no_ai: "Live digs aren't switched on for this address yet. The sample dig below shows how it works.",
   bad_key: "That API key wasn't accepted. Check it in the Claude Console, then save it again.",
   network: "Couldn't reach Claude. Check your connection and press Dig again.",
   overloaded: "Claude is busy right now. Wait a minute and press Dig again."
@@ -447,7 +450,7 @@ $("digForm").addEventListener("submit", async (e) => {
   const seedList = seeds().map((s) => s.value.trim()).filter(Boolean).slice(0, MAX_SEEDS);
   const mood = $("mood").value.trim();
   if (!seedList.length && !mood) { setStatus("Add a record you love or describe a mood, then dig.", true); seeds()[0].focus(); return; }
-  if (!aiReady()) { setStatus(ERR.no_ai, true); renderKeyBox(); $("apiKey").focus(); return; }
+  if (!aiReady()) { setStatus(ERR.no_ai, true); renderKeyBox(); if (OWNER_TEST) $("apiKey").focus(); return; }
   store.set("dc-form", { seeds: seeds().map((s) => s.value).filter((v) => v.trim()), mood });
   ctl = new AbortController();
   $("digBtn").disabled = true; $("stopBtn").hidden = false;
@@ -591,7 +594,7 @@ function renderProfile() {
   const note = document.createElement("span"); note.className = "status";
   if (rs.length < 3) { btn.disabled = true; note.textContent = "React to at least 3 records first."; }
   btn.onclick = async () => {
-    if (!aiReady()) { note.textContent = "Connect Claude first, under Start a dig."; return; }
+    if (!aiReady()) { note.textContent = "Taste summaries aren't switched on for this address yet."; return; }
     btn.disabled = true; note.textContent = "Reading your reactions…";
     const fmt = (l) => l.map((p) => p.artist + " – " + p.album + (p.year ? " (" + p.year + (p.label ? ", " + p.label : "") + ")" : "")).join("; ") || "none";
     try {
@@ -614,7 +617,7 @@ function renderProfile() {
 
 (async () => {
   try { sample = await window.claude?.use?.("sample"); } catch { sample = null; }
-  if (!sample) { renderKeyBox(); if (!aiReady()) setStatus("Showing a sample dig. Connect Claude below to dig for your own records."); }
+  if (!sample) { renderKeyBox(); }
 })();
 </script>
 
