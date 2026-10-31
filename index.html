@@ -34,9 +34,9 @@ body {
 }
 .wrap { max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
 .wrap > * + * { border-top: 1px solid var(--fg); padding-top: 22px; }
-.sec-title { font-size: 15px; font-weight: 700; margin: 0 0 4px; }
+.sec-title { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
 header { display: flex; flex-direction: column; gap: 2px; }
-.brand { font-size: 15px; font-weight: 700; margin: 0; white-space: nowrap; }
+.brand { font-size: 18px; font-weight: 700; margin: 0; white-space: nowrap; }
 .tagline { margin: 0; max-width: 52ch; }
 .label { font-size: 15px; color: var(--muted); }
 header .label { order: 3; }
@@ -82,7 +82,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .status.err { color: var(--fg); font-weight: 500; }
 
 .crate-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-.crate-head h2 { font-size: 15px; font-weight: 700; margin: 0; }
+.crate-head h2 { font-size: 18px; font-weight: 700; margin: 0; }
 .example-flag { font-size: 13px; color: var(--muted); }
 .crate { display: flex; flex-direction: column; }
 .pick:first-child { padding-top: 6px; }
@@ -160,6 +160,8 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .mode-opt + .mode-opt span { border-left: 1px solid var(--fg); }
 .mode-opt input:checked + span { background: var(--fg); color: var(--bg); font-weight: 700; }
 .mode-opt input:focus-visible + span { outline: 2px solid var(--link); outline-offset: -4px; }
+.player { margin: 0 0 18px; font-family: var(--mono); font-size: clamp(10px, 3.1vw, 14px); line-height: 1.3; color: var(--fg); overflow-x: auto; max-width: 100%; }
+.player #spindle { color: var(--pink); font-weight: 700; }
 .react-note { font-size: 13px; color: var(--muted); align-self: center; }
 .crate-count { font-weight: 400; color: var(--muted); }
 .loved { display: flex; flex-direction: column; }
@@ -229,6 +231,19 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 
   <section>
     <h2 class="sec-title">Your crates <span class="crate-count" id="crateCount"></span></h2>
+    <pre class="player" aria-hidden="true">+--------------------------------------+
+|                               .-.    |
+|      .--------------.        ( o )   |
+|   .-'  .----------.  '-.      '|'    |
+|  /   .'  .------.  '.   \     ||     |
+| |   /   /  .--.  \   \   |    ||     |
+| |  |   |  ( <span id="spindle">@@</span> )  |   |  |   //      |
+| |   \   \  '--'  /   /  _|__//       |
+|  \   '.  '------'  .'  (____)        |
+|   '-.  '----------'  .-'             |
+|      '--------------'                |
+|  (33)  (45)                 [==]     |
++--------------------------------------+</pre>
     <div class="crates" id="loved"></div>
   </section>
 
@@ -611,6 +626,17 @@ const ERR = {
   overloaded: "Claude is busy right now. Wait a minute and press Dig again."
 };
 
+// The record player above the crates spins while a dig runs.
+let spinTimer = null;
+function startSpin() {
+  const el = $("spindle");
+  if (!el || spinTimer || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  const frames = ["--", "\\\\", "||", "//"];
+  let i = 0;
+  spinTimer = setInterval(() => { el.textContent = frames[i++ % frames.length]; }, 130);
+}
+function stopSpin() { clearInterval(spinTimer); spinTimer = null; const el = $("spindle"); if (el) el.textContent = "@@"; }
+
 // ---------- Dig mode: "Records I love" or "A vibe" ----------
 function digMode() { return $("modeVibe").checked ? "vibe" : "records"; }
 function setDigMode() {
@@ -839,6 +865,7 @@ $("digForm").addEventListener("submit", async (e) => {
   setStatus("Digging through the crates… this can take up to a minute.");
   const prog = $("progress"), bar = $("progressBar");
   let found = 0, target = 5, dropped = 0;
+  startSpin();
   prog.hidden = false; prog.classList.add("waiting"); bar.style.width = ""; prog.removeAttribute("aria-valuenow");
   const onText = ({ text }) => {
     const n = Math.min(target, (text.match(/"why"\s*:\s*"(?:[^"\\]|\\.)*"/g) || []).length);
@@ -925,6 +952,7 @@ $("digForm").addEventListener("submit", async (e) => {
     }
   } finally {
     $("digBtn").disabled = false; $("stopBtn").hidden = true;
+    stopSpin();
     setTimeout(() => { $("progress").hidden = true; $("progress").classList.remove("waiting"); $("progressBar").style.width = "0"; }, 450);
   }
 });
