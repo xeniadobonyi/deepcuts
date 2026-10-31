@@ -137,7 +137,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
   <form id="digForm" novalidate>
     <h2 class="sec-title">Your taste</h2>
     <fieldset>
-      <legend class="label">Records you love (artist – album), one to five</legend>
+      <legend class="label">Up to three records you love (artist – album)</legend>
       <div class="seed-list" id="seedList">
         <input type="text" id="seed1" aria-label="Record 1" placeholder="e.g. Madvillain – Madvillainy" autocomplete="off">
       </div>
@@ -206,7 +206,7 @@ const EXAMPLE = {
 };
 
 const $ = (id) => document.getElementById(id);
-const MAX_SEEDS = 5;
+const MAX_SEEDS = 3;
 const SEED_EXAMPLES = ["e.g. Madvillain – Madvillainy", "e.g. Joy Division – Unknown Pleasures", "e.g. Isaac Hayes – Hot Buttered Soul", "e.g. Kate Bush – Hounds of Love", "e.g. Fela Kuti – Zombie"];
 const seeds = () => [...document.querySelectorAll("#seedList input")];
 function addSeedField(value, focus) {
