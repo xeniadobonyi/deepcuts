@@ -9,19 +9,22 @@
 <style>
 /* Layout: a plain text document, one column, hairline rules between records. Looks unstyled; spacing and type are tuned. */
 :root {
-  --bg: #ffffff;
+  --bg: #ececec;
+  --surface: #ffffff;
   --fg: #111111;
-  --muted: #6b6b6b;
-  --rule: #d9d9d9;
+  --muted: #5f5f5f;
+  --rule: #c9c9c9;
+  --pink: #d1306c;
+  --on-pink: #ffffff;
   --link: #1a33d6;
   --visited: #5b2a9e;
   --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --bg: #121212; --fg: #e8e8e8; --muted: #9a9a9a; --rule: #333333; --link: #8ea8ff; --visited: #c3a2f2; color-scheme: dark; }
+  :root:not([data-theme="light"]) { --bg: #121212; --surface: #1d1d1d; --fg: #e8e8e8; --muted: #9a9a9a; --rule: #333333; --pink: #ff7eab; --on-pink: #1a0a10; --link: #8ea8ff; --visited: #c3a2f2; color-scheme: dark; }
 }
-:root[data-theme="dark"] { --bg: #121212; --fg: #e8e8e8; --muted: #9a9a9a; --rule: #333333; --link: #8ea8ff; --visited: #c3a2f2; color-scheme: dark; }
+:root[data-theme="dark"] { --bg: #121212; --surface: #1d1d1d; --fg: #e8e8e8; --muted: #9a9a9a; --rule: #333333; --pink: #ff7eab; --on-pink: #1a0a10; --link: #8ea8ff; --visited: #c3a2f2; color-scheme: dark; }
 * { box-sizing: border-box; }
 body {
   background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.55;
@@ -45,7 +48,7 @@ fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: colu
 legend { padding: 0; margin-bottom: 8px; }
 legend.label { color: var(--fg); font-weight: 700; font-size: 15px; }
 input[type=text], #apiKey {
-  width: 100%; min-height: 44px; font: inherit; font-size: 16px; color: var(--fg); background: var(--bg);
+  width: 100%; min-height: 44px; font: inherit; font-size: 16px; color: var(--fg); background: var(--surface);
   border: 1px solid var(--muted); border-radius: 3px; padding: 10px 12px;
 }
 input[type=text]:hover, #apiKey:hover { border-color: var(--fg); }
@@ -65,7 +68,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 }
 .btn:hover { opacity: .85; }
 .btn:disabled { opacity: .4; cursor: default; }
-.btn.ghost { color: var(--fg); background: var(--bg); border-color: var(--muted); font-weight: 500; font-size: 15px; min-height: 40px; padding: 8px 14px; }
+.btn.ghost { color: var(--fg); background: var(--surface); border-color: var(--muted); font-weight: 500; font-size: 15px; min-height: 40px; padding: 8px 14px; }
 .btn.ghost:hover { opacity: 1; border-color: var(--fg); }
 .progress { position: relative; height: 3px; background: var(--rule); overflow: hidden; }
 .progress .bar { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--fg); transition: width .4s ease; }
@@ -101,13 +104,15 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .why { margin: 0; max-width: 62ch; }
 .links { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; }
 .react { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.chip { font: inherit; font-size: 14px; background: var(--bg); color: var(--fg); border: 1px solid var(--muted); border-radius: 3px; padding: 6px 12px; min-height: 36px; cursor: pointer; }
+.chip { font: inherit; font-size: 14px; background: var(--surface); color: var(--fg); border: 1px solid var(--muted); border-radius: 3px; padding: 6px 12px; min-height: 36px; cursor: pointer; }
 .chip { display: inline-flex; align-items: center; gap: 6px; }
 .chip svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .chip:hover { border-color: var(--fg); }
 .chip[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); font-weight: 700; }
 .chip[aria-pressed="true"] svg { stroke-width: 2.2; }
-.chip[data-r="loved"][aria-pressed="true"] svg { fill: currentColor; }
+.chip[data-r="loved"] svg { stroke: var(--pink); }
+.chip[data-r="loved"][aria-pressed="true"] { background: var(--pink); border-color: var(--pink); color: var(--on-pink); }
+.chip[data-r="loved"][aria-pressed="true"] svg { stroke: var(--on-pink); fill: var(--on-pink); }
 .profile { display: flex; flex-direction: column; gap: 12px; }
 .stats { display: flex; flex-wrap: wrap; gap: 4px 18px; font-family: var(--mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .stats b { color: var(--fg); font-weight: 700; }
