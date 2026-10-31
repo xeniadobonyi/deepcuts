@@ -225,7 +225,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     </fieldset>
     <fieldset id="vibeFs" hidden>
       <legend class="label">Keywords, a mood or a moment</legend>
-      <input type="text" id="mood" aria-label="Keywords, a mood or a moment" placeholder="e.g. Turkish psych, early 70s" autocomplete="off">
+      <input type="text" id="mood" aria-label="Keywords, a mood or a moment" placeholder="e.g. French 90s hip hop, Brazilian samba-jazz, Ibiza house" autocomplete="off">
     </fieldset>
     <div class="actions">
       <button class="btn" type="submit" id="digBtn">Dig for five</button>
@@ -298,13 +298,14 @@ const EXAMPLE = {
 
 const $ = (id) => document.getElementById(id);
 const MAX_SEEDS = 3;
-// A different niche vibe as the example each visit (short enough to fit a phone).
-const VIBE_EXAMPLES = [
-  "Turkish psych, early 70s", "Balearic house, Ibiza 1990", "Soviet jazz-funk", "Tokyo city pop at night",
-  "Lagos Afro-funk, 70s", "Italo disco, empty dancefloor", "Brazilian samba-jazz, 60s", "Zouk love songs, 80s",
-  "French library music", "Spiritual jazz at sunrise", "Minimal wave, cold and dark", "Ethiopian jazz, 70s"
-];
-try { document.getElementById("mood").placeholder = "e.g. " + VIBE_EXAMPLES[Math.floor(Math.random() * VIBE_EXAMPLES.length)]; } catch {}
+// The vibe examples. All three when they fit the field; on narrow phones, one of them per visit.
+const VIBE_EXAMPLES = ["French 90s hip hop", "Brazilian samba-jazz", "Ibiza house"];
+function setVibePlaceholder() {
+  const el = document.getElementById("mood"), all = "e.g. " + VIBE_EXAMPLES.join(", ");
+  let fits = false;
+  try { const c = document.createElement("canvas").getContext("2d"); c.font = getComputedStyle(el).font; fits = c.measureText(all).width <= (el.clientWidth || 0) - 24; } catch {}
+  el.placeholder = fits ? all : "e.g. " + VIBE_EXAMPLES[Math.floor(Math.random() * VIBE_EXAMPLES.length)];
+}
 // Shown as placeholders in the three record fields, in this order.
 const SEED_EXAMPLES = [
   "Bill Evans – Sunday at the Village Vanguard",
@@ -723,6 +724,7 @@ function setDigMode() {
   const vibe = digMode() === "vibe";
   $("recordsFs").hidden = vibe;
   $("vibeFs").hidden = !vibe;
+  if (vibe) setVibePlaceholder();
 }
 document.querySelectorAll("input[name='digMode']").forEach((r) => r.addEventListener("change", () => { setDigMode(); setStatus(""); (digMode() === "vibe" ? $("mood") : seeds()[0]).focus(); }));
 
