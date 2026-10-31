@@ -146,7 +146,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
   <form id="digForm" novalidate>
     <div>
       <h2 class="sec-title">Start a dig</h2>
-      <p class="label" style="margin:0">Start from records you love, a mood, or both.</p>
+      <p class="label" style="margin:0">Start from records you love, keywords, or both.</p>
     </div>
     <fieldset>
       <legend class="label">Up to three records you love (artist – album)</legend>
@@ -156,8 +156,8 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <button type="button" class="btn ghost add-seed" id="addSeed">+ Add another record</button>
     </fieldset>
     <fieldset>
-      <legend class="label">A mood or moment</legend>
-      <input type="text" id="mood" placeholder="e.g. rainy Sunday morning, late-night drive, cooking for friends" autocomplete="off">
+      <legend class="label">Keywords, a mood or a moment</legend>
+      <input type="text" id="mood" aria-label="Keywords, a mood or a moment" placeholder="e.g. California sunny 70s, Brazilian jazz, rainy Sunday" autocomplete="off">
     </fieldset>
     <div class="actions">
       <button class="btn" type="submit" id="digBtn">Dig for five</button>
@@ -417,24 +417,34 @@ function buildPrompt(seedList, mood) {
   const byType = (t) => Object.values(reactions).filter((x) => x.r === t).map((x) => x.artist + " – " + x.album);
   const loved = byType("loved"), nope = byType("nope"), known = byType("known");
   const previous = [...new Set(digHistory.flatMap((d) => d.picks.map((p) => p.artist + " – " + p.album)))].slice(0, 80);
+  const hasSeeds = seedList.length > 0, hasWords = !!mood;
+  const portrait = store.get("dc-portrait", null)?.portrait;
   return [
     "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
-    seedList.length ? "Recommend exactly 5 albums for a listener who loves these records:" : "Recommend exactly 5 albums for this mood or moment: " + mood,
+    hasWords ? "The listener searched for: \"" + mood + "\"" : "",
+    hasWords ? "This search is the brief. Every one of the 5 albums must clearly match ALL of its words, taken literally: any place, era, genre, mood, instrument or scene it names. If it names a place and a decade, every album must come from that place and that decade. Do not drift towards other styles." : "",
+    hasSeeds && hasWords ? "Within that brief, lean towards records a fan of these albums would also enjoy:" : "",
+    hasSeeds && !hasWords ? "Recommend exactly 5 albums for a listener who loves these records:" : "",
     ...seedList.map((s) => "- " + s),
-    seedList.length && mood ? "The picks should also suit this mood or moment: " + mood : "",
-    "Balance: mostly records close to their taste, plus one or two that go somewhere a little unexpected, each still joined by a real, specific thread.",
-    store.get("dc-portrait", null)?.portrait ? "Their taste so far, in summary: " + store.get("dc-portrait", null).portrait : "",
-    loved.length ? "They loved these earlier picks (use them as extra taste signal): " + loved.join("; ") : "",
-    nope.length ? "They did not like these earlier picks (steer away from what they share): " + nope.join("; ") : "",
-    "Never recommend any of these, they already know them: " + [...seedList, ...known, ...previous].join("; "),
+    !hasSeeds ? "Recommend exactly 5 albums for that search." : "",
+    // Taste history shapes record-based digs only; a keyword search is answered on its own terms.
+    !hasWords ? "Balance: mostly records close to their taste, plus one or two that go somewhere a little unexpected, each still joined by a real, specific thread." : "",
+    !hasWords && portrait ? "Their taste so far, in summary: " + portrait : "",
+    !hasWords && loved.length ? "They loved these earlier picks (use them as extra taste signal): " + loved.join("; ") : "",
+    !hasWords && nope.length ? "They did not like these earlier picks (steer away from what they share): " + nope.join("; ") : "",
+    "Never recommend any of these exact albums, they already know them: " + [...seedList, ...known, ...nope, ...previous].join("; "),
     "Rules:",
     "- Only real, released albums. Favour lesser-known records, deep cuts and underrated albums over famous classics.",
-    seedList.length
-      ? "- Each pick must connect to their records through one specific, real thread: a shared producer, engineer or session player, a sample, a label, a scene, or a direct influence."
-      : "- Each pick must suit the mood, and name one specific, real quality that makes it fit: its sound, tempo, instrumentation, era or scene.",
+    hasWords
+      ? "- For each pick, name the specific, real quality that makes it match the search: where and when it was made, its scene, its sound or instrumentation."
+      : "- Each pick must connect to their records through one specific, real thread: a shared producer, engineer or session player, a sample, a label, a scene, or a direct influence.",
     "- Accuracy matters more than detail. Only state facts (years, labels, personnel, samples) you are highly confident are correct. If unsure of the year or label, use null. Never invent credits or samples.",
-    "- \"why\": 2 or 3 plain, specific sentences addressed to the listener. Start with \"Because you love <one of their records>,\" (or, when they gave only a mood, \"For <their mood>,\") then name the specific thread or quality, then say what this record sounds like and what they will get from it.",
-    "- \"thread\": 2 to 3 words naming the connection type, e.g. \"Shared producer\", \"Sample source\", \"Same label\", \"Scene\", \"Influence\".",
+    hasWords
+      ? "- \"why\": 2 or 3 plain, specific sentences addressed to the listener. Start with \"For " + mood + ",\" then say how this record matches the search, then what it sounds like and what they will get from it."
+      : "- \"why\": 2 or 3 plain, specific sentences addressed to the listener. Start with \"Because you love <one of their records>,\" then name the specific thread that links them, then say what this record sounds like and what they will get from it.",
+    hasWords
+      ? "- \"thread\": 2 to 4 words naming how it matches the search, e.g. \"Laurel Canyon, 1972\", \"West Coast soft rock\"."
+      : "- \"thread\": 2 to 3 words naming the connection type, e.g. \"Shared producer\", \"Sample source\", \"Same label\", \"Scene\", \"Influence\".",
     "- Spread the 5 picks across different artists and, where the seeds allow, different genres.",
     'Reply with only a JSON array of 5 objects: [{"artist": string, "album": string, "year": string|null, "label": string|null, "thread": string, "why": string}]'
   ].filter(Boolean).join("\n");
