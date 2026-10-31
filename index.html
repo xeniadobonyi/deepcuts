@@ -134,6 +134,9 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .past .open-dig { margin-top: 6px; font-size: 13px; }
 .analysis { display: flex; flex-direction: column; gap: 2px; }
 .analysis-h { margin: 6px 0 0; font-weight: 700; font-size: 13px; }
+.sleeve { position: relative; }
+.sleeve img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.sleeve.has-cover span { visibility: hidden; }
 .react-note { font-size: 13px; color: var(--muted); align-self: center; }
 .crate-count { font-weight: 400; color: var(--muted); }
 .loved { display: flex; flex-direction: column; }
@@ -360,6 +363,27 @@ async function askClaude(prompt, { signal, onText } = {}) {
   return parseJSONLoose(text);
 }
 
+// Album covers come from the site's own /api/cover lookup (MusicBrainz + Cover Art Archive).
+// They load one at a time to respect MusicBrainz's limit; the coloured sleeve stays if none is found.
+const coverQueue = [];
+let coverBusy = false;
+function queueCover(sleeve, p) {
+  if (!API_URL) return;
+  coverQueue.push([sleeve, p]);
+  pumpCovers();
+}
+function pumpCovers() {
+  if (coverBusy || !coverQueue.length) return;
+  coverBusy = true;
+  const [sleeve, p] = coverQueue.shift();
+  const img = new Image();
+  img.alt = ""; img.decoding = "async";
+  const done = () => { coverBusy = false; setTimeout(pumpCovers, 1100); };
+  img.onload = () => { if (sleeve.isConnected) { sleeve.prepend(img); sleeve.classList.add("has-cover"); } done(); };
+  img.onerror = done;
+  img.src = "/api/cover?artist=" + encodeURIComponent(p.artist) + "&album=" + encodeURIComponent(p.album);
+}
+
 function renderKeyBox() {
   const box = $("keyBox");
   box.hidden = !!sample || !!API_URL || !OWNER_TEST;
@@ -449,6 +473,7 @@ function render(picks, isExample, fresh) {
     const sa = document.createElement("span"); const sb = document.createElement("b"); sb.textContent = p.artist; sa.append(sb);
     const sAl = document.createElement("span"); sAl.textContent = p.album;
     sleeve.append(sa, sAl);
+    queueCover(sleeve, p);
     const body = document.createElement("div"); body.className = "pick-body";
     body.append(top, why, links, react);
     el.append(sleeve, body);
