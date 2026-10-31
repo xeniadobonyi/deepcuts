@@ -177,6 +177,12 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .suggest-opt span:first-child { flex: 1 1 14ch; min-width: 0; overflow-wrap: break-word; }
 .suggest-meta { flex: 0 1 auto; max-width: 100%; font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .suggest-opt:hover .suggest-meta, .suggest-opt[aria-selected="true"] .suggest-meta { color: var(--bg); }
+.level { display: flex; flex-direction: column; gap: 2px; }
+.level-line { margin: 0; font-family: var(--mono); font-size: 13px; letter-spacing: .04em; }
+.level-line > span { display: flex; flex-wrap: wrap; column-gap: 2ch; }
+.level-meter { white-space: nowrap; letter-spacing: .08em; }
+.level-on { color: var(--pink); }
+.level-next { margin: 0; font-size: 13px; color: var(--muted); }
 .person-btn { font: inherit; background: none; border: 0; padding: 0; color: var(--link); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; text-align: left; }
 .didyoumean { margin: -2px 0 0; font-size: 14px; color: var(--fg); }
 .didyoumean-btn { font: inherit; font-weight: 700; background: none; border: 0; padding: 0; color: var(--link); text-decoration: underline; cursor: pointer; }
@@ -550,7 +556,7 @@ function render(picks, isExample, fresh, append) {
     if (dcFresh(p.dc)) {
       rarity = document.createElement("p"); rarity.className = "rarity";
       // RARITY ▮▮▮▮▯  Discogs 312 own / 540 want: five bars, fewer owners means more bars
-      const h = p.dc.have, bars = p.dc.many ? 1 : h < 250 ? 5 : h < 1000 ? 4 : h < 3000 ? 3 : h < 8000 ? 2 : 1;
+      const h = p.dc.have, bars = rarityBars(p.dc);
       const lab = document.createElement("span"); lab.className = "rarity-label"; lab.textContent = "RARITY ";
       const on = document.createElement("span"); on.className = "rarity-on"; on.textContent = "\u25ae".repeat(bars);
       const off = document.createElement("span"); off.className = "rarity-off"; off.textContent = "\u25af".repeat(5 - bars);
@@ -577,14 +583,17 @@ function render(picks, isExample, fresh, append) {
       b.setAttribute("aria-pressed", reactions[k]?.r === val ? "true" : "false");
       b.onclick = () => {
         const undo = reactions[k]?.r === val;
+        const levelBefore = diggerLevel();
         if (undo) delete reactions[k];
-        else reactions[k] = { r: val, artist: p.artist, album: p.album, year: p.year || "", label: p.label || "", thread: p.thread || "", cover: p.cover || "", rgId: p.rgId || "", at: Date.now() };
+        else reactions[k] = { r: val, artist: p.artist, album: p.album, year: p.year || "", label: p.label || "", thread: p.thread || "", cover: p.cover || "", rgId: p.rgId || "", bars: rarityBars(p.dc), at: Date.now() };
         store.set("dc-reactions", reactions); renderHistory(); renderProfile(); renderCrate(); maybeAutoSummary();
         if (!undo && val === "loved") queueCredits(k);
         react.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", "false"));
         if (reactions[k]) b.setAttribute("aria-pressed", "true");
         const NOTE = { loved: "Saved to your crate.", nope: "Got it, fewer like this.", known: "Noted. It won't come up again." };
         fb.textContent = undo ? (val === "loved" ? "Removed from your crate." : "") : NOTE[val];
+        const levelNow = diggerLevel();
+        if (levelNow > levelBefore) fb.textContent += " Level up: " + LEVELS[levelNow].name + "!";
       };
       b.dataset.k = k;
       react.append(b);
@@ -990,6 +999,7 @@ const isMainstream = (c) => !!c.dc && (c.dc.many || c.dc.have > MAINSTREAM_HAVE)
 const rarityBonus = (c) => (!c.dc ? 0 : (c.dc.have < 1500 ? 1 : 0) + (c.dc.want > c.dc.have ? 1 : 0) - (c.dc.have > 4000 ? 1 : 0));
 // Leave out mainstream records when enough others remain.
 const dropMainstream = (list, keep) => { const rare = list.filter((c) => !isMainstream(c)); return rare.length >= keep ? rare : list; };
+const rarityBars = (dc) => { if (!dc) return 0; const h = dc.have || 0; return dc.many ? 1 : h < 250 ? 5 : h < 1000 ? 4 : h < 3000 ? 3 : h < 8000 ? 2 : 1; };
 const dcFresh = (dc) => !!dc && Date.now() - (dc.at || 0) < DC_FRESH_MS;
 const count = (n) => Number(n || 0).toLocaleString("en");
 
@@ -1053,6 +1063,38 @@ function lovedPeople(loved) {
   });
   return Object.values(people).filter((x) => x.recs.length >= 2).sort((a, b) => b.recs.length - a.recs.length).slice(0, 5);
 }
+// ---------- Digger levels ----------
+// Levels grow with how deep you dig, not just how much you click: the higher ones need rare records.
+// Rarity is the average Discogs rarity bars of loved records; when Discogs data is missing it isn't required.
+const LEVELS = [
+  { name: "Just Browsing" },
+  { name: "Flicking Through the Bins", loved: 5 },
+  { name: "Back-of-the-Shop Browser", loved: 12, rarity: 2 },
+  { name: "Mixtape Maker", loved: 20, rarity: 2 },
+  { name: "Sleeve Reader", loved: 25, rarity: 3, credits: true },
+  { name: "Ultimate Digger", loved: 40, rarity: 4, credits: true }
+];
+function diggerStats() {
+  const idx = pickIndex();
+  const loved = Object.entries(reactions).filter(([, v]) => v.r === "loved").map(([k, v]) => ({ ...(idx[k] || {}), ...v }));
+  const bars = loved.map((x) => x.bars || rarityBars(x.dc)).filter(Boolean);
+  const measured = bars.length >= Math.max(3, loved.length / 2);
+  const anyCredits = loved.some((x) => x.credits && x.credits.src !== "none");
+  return { loved: loved.length, rarity: measured ? bars.reduce((a, b) => a + b, 0) / bars.length : null, people: lovedPeople(loved).length, anyCredits, list: loved };
+}
+// What still stands between these stats and a level ("" when reached).
+function levelGap(L, st) {
+  if (L.loved && st.loved < L.loved) { const n = L.loved - st.loved; return "Love " + n + " more record" + (n > 1 ? "s" : ""); }
+  if (L.rarity && st.rarity !== null && st.rarity < L.rarity) return "Love rarer records (average rarity " + "\u25ae".repeat(L.rarity) + " or more)";
+  if (L.credits && st.anyCredits && !st.people) return "Love two records with the same producer or engineer";
+  return "";
+}
+function diggerLevel(st = diggerStats()) {
+  let lv = 0;
+  for (let i = 1; i < LEVELS.length; i++) { if (levelGap(LEVELS[i], st)) break; lv = i; }
+  return lv;
+}
+
 // Start a dig from the loved records a person worked on: their shared credit becomes the common ground.
 function digFromPerson(person) {
   if ($("digBtn").disabled) return;
@@ -1611,6 +1653,22 @@ function renderProfile() {
   const rs = Object.entries(reactions);
   const by = (t) => rs.filter(([, v]) => v.r === t).map(([k, v]) => ({ ...v, ...(idx[k] || {}) }));
   const loved = by("loved"), nope = by("nope"), known = by("known");
+
+  // LEVEL 3 · BACK-OF-THE-SHOP BROWSER  ▮▮▮▯▯▯
+  const st = diggerStats(), lv = diggerLevel(st);
+  const level = document.createElement("div"); level.className = "level";
+  const lt = document.createElement("p"); lt.className = "level-line";
+  const sr = document.createElement("span"); sr.className = "sr-only"; sr.textContent = "Level " + (lv + 1) + " of " + LEVELS.length + ": " + LEVELS[lv].name + ".";
+  const vis = document.createElement("span"); vis.setAttribute("aria-hidden", "true");
+  const name = document.createElement("b"); name.textContent = "LEVEL " + (lv + 1) + " \u00b7 " + LEVELS[lv].name.toUpperCase();
+  const on = document.createElement("span"); on.className = "level-on"; on.textContent = "\u25ae".repeat(lv + 1);
+  const off = document.createElement("span"); off.className = "rarity-off"; off.textContent = "\u25af".repeat(LEVELS.length - lv - 1);
+  const meterL = document.createElement("span"); meterL.className = "level-meter"; meterL.append(on, off);
+  vis.append(name, meterL); lt.append(sr, vis);
+  const next = document.createElement("p"); next.className = "level-next";
+  next.textContent = lv + 1 < LEVELS.length ? levelGap(LEVELS[lv + 1], st) + " to reach " + LEVELS[lv + 1].name + "." : "Top level. Nobody digs deeper.";
+  level.append(lt, next);
+  box.append(level);
 
   const stats = document.createElement("div"); stats.className = "stats";
   [[shownKeys.size, "records shown"], [loved.length, "loved"], [nope.length, "not for me"], [repeats, "repeats"]]
