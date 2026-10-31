@@ -62,7 +62,10 @@ module.exports = async function handler(req, res) {
           max_tokens: 3000,
           temperature: 0.7,
           stream: true,
-          messages: [{ role: "user", content: prompt }],
+          messages: [
+            { role: "system", content: "You are a precise music expert. When asked for JSON, reply with valid JSON only: no markdown, no headings, no extra text." },
+            { role: "user", content: prompt },
+          ],
         }),
       });
     } catch {

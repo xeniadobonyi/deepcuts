@@ -293,8 +293,30 @@ function digsUsed() { const d = store.get("dc-digs", null); return d && d.day ==
 function countDig() { store.set("dc-digs", { day: todayKey(), n: digsUsed() + 1 }); }
 function digsLeftNote() { return limited() ? Math.max(0, DIGS_PER_DAY - digsUsed()) + " of " + DIGS_PER_DAY + " free digs left today." : ""; }
 
+// Accept the shapes different models produce: a bare list, or a list inside an object, with varied key names.
+function normalizePicks(res) {
+  let arr = res;
+  if (!Array.isArray(arr) && arr && typeof arr === "object") arr = Object.values(arr).find(Array.isArray) || [arr];
+  if (!Array.isArray(arr)) return [];
+  const s = (v) => (v === null || v === undefined ? "" : String(v).trim());
+  const get = (o, ...ks) => { for (const k of Object.keys(o)) if (ks.includes(k.toLowerCase().replace(/[\s-]/g, "_"))) return o[k]; return ""; };
+  return arr.filter((o) => o && typeof o === "object").map((o) => ({
+    artist: s(get(o, "artist", "artist_name", "band", "musician")),
+    album: s(get(o, "album", "title", "album_title", "album_name", "record")),
+    year: s(get(o, "year", "release_year", "released")).replace(/^null$/i, ""),
+    label: s(get(o, "label", "record_label")).replace(/^null$/i, ""),
+    thread: s(get(o, "thread", "connection", "tag", "match")),
+    why: s(get(o, "why", "reason", "explanation", "description"))
+  })).filter((p) => p.artist && p.album).slice(0, 5);
+}
+
 function parseJSONLoose(t) {
+  t = String(t || "").replace(/<think>[\s\S]*?<\/think>/g, "");
   try { return JSON.parse(t); } catch {}
+  const tidy = (x) => x.replace(/,\s*([\]}])/g, "$1");
+  try { return JSON.parse(tidy(t)); } catch {}
+  const as = t.indexOf("["), ae = t.lastIndexOf("]");
+  if (as >= 0 && ae > as) { try { return JSON.parse(tidy(t.slice(as, ae + 1))); } catch {} }
   const f = t.match(/```(?:json)?\s*([\s\S]*?)```/); if (f) { try { return JSON.parse(f[1]); } catch {} }
   const s = t.search(/[\[{]/), e = Math.max(t.lastIndexOf("]"), t.lastIndexOf("}"));
   if (s >= 0 && e > s) { try { return JSON.parse(t.slice(s, e + 1)); } catch {} }
@@ -510,10 +532,16 @@ $("digForm").addEventListener("submit", async (e) => {
     }
   };
   try {
-    const res = await askClaude(buildPrompt(seedList, mood), { signal: ctl.signal, onText });
+    const prompt = buildPrompt(seedList, mood);
+    let picks = [];
+    try { picks = normalizePicks(await askClaude(prompt, { signal: ctl.signal, onText })); }
+    catch (e) { if (e?.code !== "invalid_json") throw e; }
+    if (!picks.length) {
+      // Free models sometimes answer in a different shape: ask once more, more strictly.
+      setStatus("Tidying up the answer…");
+      picks = normalizePicks(await askClaude(prompt + "\nIMPORTANT: reply with the JSON array only. No headings, no explanation, no markdown.", { signal: ctl.signal, onText }));
+    }
     bar.style.width = "100%";
-    const picks = (Array.isArray(res) ? res : []).filter((p) => p && p.artist && p.album).slice(0, 5)
-      .map((p) => ({ artist: String(p.artist), album: String(p.album), year: p.year ? String(p.year) : "", label: p.label ? String(p.label) : "", thread: p.thread ? String(p.thread) : "", why: p.why ? String(p.why) : "" }));
     if (!picks.length) throw { code: "invalid_json" };
     if (limited()) countDig();
     current = { picks, seeds: seedList, mood };
