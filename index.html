@@ -50,6 +50,8 @@ input[type=text] {
 input[type=text]:focus { outline: none; border-bottom-color: var(--fg); }
 input[type=text]::placeholder { color: var(--muted); }
 button:focus-visible, a:focus-visible, input[type=range]:focus-visible { outline: 1px dotted var(--fg); outline-offset: 3px; }
+.seed-list { display: flex; flex-direction: column; gap: 6px; }
+.add-seed { align-self: flex-start; font-size: 13px; margin-top: 4px; }
 .range-row { display: flex; flex-direction: column; gap: 4px; }
 input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .range-ends { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
@@ -135,10 +137,11 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
   <form id="digForm" novalidate>
     <h2 class="sec-title">Your taste</h2>
     <fieldset>
-      <legend class="label">Three records you love (artist – album)</legend>
-      <input type="text" id="seed1" aria-label="First record" placeholder="e.g. Madvillain – Madvillainy" autocomplete="off">
-      <input type="text" id="seed2" aria-label="Second record" placeholder="e.g. Joy Division – Unknown Pleasures" autocomplete="off">
-      <input type="text" id="seed3" aria-label="Third record" placeholder="e.g. Isaac Hayes – Hot Buttered Soul" autocomplete="off">
+      <legend class="label">Records you love (artist – album), one to five</legend>
+      <div class="seed-list" id="seedList">
+        <input type="text" id="seed1" aria-label="Record 1" placeholder="e.g. Madvillain – Madvillainy" autocomplete="off">
+      </div>
+      <button type="button" class="btn ghost add-seed" id="addSeed">+ Add another record</button>
     </fieldset>
     <fieldset>
       <legend class="label">Mood or occasion (optional)</legend>
@@ -203,7 +206,22 @@ const EXAMPLE = {
 };
 
 const $ = (id) => document.getElementById(id);
-const seeds = [$("seed1"), $("seed2"), $("seed3")];
+const MAX_SEEDS = 5;
+const SEED_EXAMPLES = ["e.g. Madvillain – Madvillainy", "e.g. Joy Division – Unknown Pleasures", "e.g. Isaac Hayes – Hot Buttered Soul", "e.g. Kate Bush – Hounds of Love", "e.g. Fela Kuti – Zombie"];
+const seeds = () => [...document.querySelectorAll("#seedList input")];
+function addSeedField(value, focus) {
+  const n = seeds().length;
+  if (n >= MAX_SEEDS) return;
+  const inp = document.createElement("input");
+  inp.type = "text"; inp.id = "seed" + (n + 1); inp.autocomplete = "off";
+  inp.setAttribute("aria-label", "Record " + (n + 1));
+  inp.placeholder = SEED_EXAMPLES[n] || "";
+  inp.value = value || "";
+  $("seedList").append(inp);
+  $("addSeed").hidden = seeds().length >= MAX_SEEDS;
+  if (focus) inp.focus();
+}
+$("addSeed").onclick = () => addSeedField("", true);
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
@@ -322,11 +340,11 @@ const ERR = {
 
 $("digForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const seedList = seeds.map((s) => s.value.trim()).filter(Boolean);
-  if (seedList.length < 1) { setStatus("Add at least one record you love, as Artist – Album.", true); seeds[0].focus(); return; }
+  const seedList = seeds().map((s) => s.value.trim()).filter(Boolean).slice(0, MAX_SEEDS);
+  if (seedList.length < 1) { setStatus("Add at least one record you love, as Artist – Album.", true); seeds()[0].focus(); return; }
   if (!sample) { setStatus("Live digging is coming soon. The sample dig below shows how it works.", true); return; }
   const adv = $("adv").value, mood = $("mood").value.trim();
-  store.set("dc-form", { seeds: seeds.map((s) => s.value), mood, adv });
+  store.set("dc-form", { seeds: seeds().map((s) => s.value).filter((v) => v.trim()), mood, adv });
   ctl = new AbortController();
   $("digBtn").disabled = true; $("stopBtn").hidden = false;
   setStatus("Digging through the crates… this can take up to a minute.");
@@ -357,7 +375,7 @@ $("adv").addEventListener("input", setAdvLabel);
 
 // Initial state
 const saved = store.get("dc-form", null);
-if (saved) { saved.seeds.forEach((v, i) => { if (seeds[i]) seeds[i].value = v || ""; }); $("mood").value = saved.mood || ""; $("adv").value = saved.adv || 3; }
+if (saved) { (saved.seeds || []).filter(Boolean).slice(0, MAX_SEEDS).forEach((v, i) => { if (i === 0) seeds()[0].value = v; else addSeedField(v); }); $("mood").value = saved.mood || ""; $("adv").value = saved.adv || 3; }
 setAdvLabel();
 if (current?.picks?.length) { render(current.picks, false, false); $("digBtn").textContent = "Dig again"; }
 else render(EXAMPLE.picks, true, false);
