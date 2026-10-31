@@ -219,7 +219,8 @@ const SEED_POOL = [
   "Daft Punk – Discovery",
   "Curtis Mayfield – Curtis",
   "Minnie Riperton – Come to My Garden",
-  "Labi Siffre – Crying Laughing Loving Lying"
+  "Labi Siffre – Crying Laughing Loving Lying",
+  "MC Solaar – Prose Combat"
 ];
 const SEED_EXAMPLES = SEED_POOL.map((s) => [Math.random(), "e.g. " + s]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
 document.getElementById("seed1").placeholder = SEED_EXAMPLES[0];
