@@ -1178,7 +1178,8 @@ async function discogsRarity(list, max = 20) {
 const TIER_NAMES = { essential: "Essential", favourite: "Digger favourite", deep: "Deep cut" };
 const TIER_ORDER = ["essential", "favourite", "deep", ""];
 const tierOf = (c) => (!c?.dc || !c.dc.at ? "" : c.dc.many || c.dc.have >= 3000 ? "essential" : c.dc.have >= 1000 ? "favourite" : "deep");
-const MIXES = [{ essential: 1, favourite: 2, deep: 2 }, { essential: 0, favourite: 2, deep: 3 }, { essential: 0, favourite: 1, deep: 4 }];
+// First dig: anchored in widely loved records, with one real find. Each Dig deeper shifts it rarer.
+const MIXES = [{ essential: 2, favourite: 2, deep: 1 }, { essential: 1, favourite: 2, deep: 2 }, { essential: 0, favourite: 2, deep: 3 }, { essential: 0, favourite: 1, deep: 4 }];
 const mixNow = () => MIXES[Math.min(digDepth, MIXES.length - 1)];
 // Take a best-first list and choose five that follow the mix. Shortfalls are filled with the next best record,
 // deeper kinds first. The rest follow as backups (used if a record can't be confirmed).
@@ -1277,7 +1278,7 @@ async function vibeFromDiscogs(mood, onText) {
   const cands = [...all.values()].filter((c) => !seen.has(keyOf(c)) && !artists.has(lc(c.artist)) && artists.add(lc(c.artist)));
   if (cands.length < 8) return [];
   // The most wanted records of each kind, laid out so every stretch of the list holds each kind.
-  const lists = [["essential", 6], ["favourite", 14], ["deep", 20]].map(([t, n]) => cands.filter((c) => tierOf(c) === t).sort((a, b) => b.dc.want - a.dc.want).slice(0, n));
+  const lists = [["essential", 10], ["favourite", 14], ["deep", 16]].map(([t, n]) => cands.filter((c) => tierOf(c) === t).sort((a, b) => b.dc.want - a.dc.want).slice(0, n));
   const pool = [];
   for (let r = 0; r < 20; r++) for (const l of lists) if (l[r]) pool.push(l[r]);
   setStatus("Choosing the best five from " + pool.length + " real records\u2026");
@@ -1666,7 +1667,7 @@ $("digForm").addEventListener("submit", async (e) => {
           setStatus("Checking how rare each record is on Discogs\u2026");
           if (await discogsRarity(pool, 24)) {
             // Keep only the most wanted famous records (the best landmarks), then strongest links first.
-            const ess = pool.filter((c) => tierOf(c) === "essential").sort((a, b) => (b.dc.want || 0) - (a.dc.want || 0)).slice(0, 6);
+            const ess = pool.filter((c) => tierOf(c) === "essential").sort((a, b) => (b.dc.want || 0) - (a.dc.want || 0)).slice(0, 10);
             pool = pool.filter((c) => tierOf(c) !== "essential" || ess.includes(c));
             // Lay the list out so every stretch of it holds each kind, strongest links first within each kind.
             const kinds = ["essential", "favourite", "deep", ""].map((t) => pool.filter((c) => tierOf(c) === t)
