@@ -15,7 +15,7 @@ module.exports = function handler(req, res) {
   const title = crate ? crate.name + " · a Deep Cuts crate" : "Deep Cuts: five records you haven't heard, and why";
   const list = crate ? crate.recs.slice(0, 4).map((r) => r.artist + " – " + r.album).join(", ") + (crate.recs.length > 4 ? " and " + (crate.recs.length - 4) + " more" : "") : "";
   const description = crate ? crate.recs.length + " records: " + list + "." : "Five records you haven't heard, and why. Found through real credits, labels and samples.";
-  const image = origin + "/api/og" + (crate ? "?d=" + d : "?v=2");
+  const image = origin + "/api/og" + (crate ? "?d=" + d : "?v=3");
   const target = crate ? "/#crate=" + d : "/";
 
   const html = `<!doctype html>

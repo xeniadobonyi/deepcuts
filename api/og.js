@@ -35,10 +35,12 @@ module.exports = async function handler(req, res) {
       h("div", { display: "flex", flexDirection: "column", gap, marginTop: 18, padding: n > 7 ? "14px 24px" : "20px 26px", border: "4px solid #111111", background: "#ffffff" }, rows)
     ];
   } else {
-    // The site's own preview: just the name, white on neon pink.
+    // The site's own preview: the name and an invitation, white on neon pink.
     const img = new ImageResponse(
-      h("div", { width: "100%", height: "100%", alignItems: "center", justifyContent: "center", background: "#ff2d95", color: "#ffffff" },
-        h("div", { fontSize: 150, letterSpacing: -2 }, "Deep Cuts")),
+      h("div", { width: "100%", height: "100%", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, background: "#ff2d95", color: "#ffffff" }, [
+        h("div", { fontSize: 150, letterSpacing: -2 }, "Deep Cuts"),
+        h("div", { fontSize: 64 }, "Pick a record.")
+      ]),
       { width: 1200, height: 630 }
     );
     const buf = Buffer.from(await img.arrayBuffer());
