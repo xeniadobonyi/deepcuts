@@ -3,6 +3,11 @@
 // light grey, black, neon pink. No outside images are fetched, so it can't fail on a slow cover server.
 
 const { readCrate } = require("./_crate.js");
+const fs = require("fs");
+const path = require("path");
+// Geist Bold (SIL Open Font License, see _fonts/Geist-LICENSE.txt) for the bold "deep cuts" on the site preview.
+let bold = null, regular = null;
+try { bold = fs.readFileSync(path.join(__dirname, "_fonts", "Geist-Bold.ttf")); regular = fs.readFileSync(path.join(__dirname, "_fonts", "Geist-Regular.ttf")); } catch { bold = regular = null; }
 
 // Every box is a flex box: the image renderer needs that for anything holding more than one child.
 const h = (type, style, children) => ({ type, props: { style: { display: "flex", ...style }, children } });
@@ -38,10 +43,10 @@ module.exports = async function handler(req, res) {
     // The site's own preview: the name and an invitation, white on neon pink.
     const img = new ImageResponse(
       h("div", { width: "100%", height: "100%", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, background: "#ff2d95", color: "#ffffff" }, [
-        h("div", { fontSize: 150, letterSpacing: -2 }, "Deep Cuts"),
-        h("div", { fontSize: 64 }, "Pick a record.")
+        h("div", { fontSize: 150, letterSpacing: -3, fontFamily: "Geist", fontWeight: 700 }, "deep cuts"),
+        h("div", { fontSize: 64, fontFamily: "Geist", fontWeight: 400 }, "Pick a record.")
       ]),
-      { width: 1200, height: 630 }
+      { width: 1200, height: 630, fonts: bold ? [{ name: "Geist", data: regular, weight: 400, style: "normal" }, { name: "Geist", data: bold, weight: 700, style: "normal" }] : undefined }
     );
     const buf = Buffer.from(await img.arrayBuffer());
     res.statusCode = 200;
