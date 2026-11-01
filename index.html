@@ -8,11 +8,11 @@
 <meta property="og:site_name" content="Deep Cuts">
 <meta property="og:title" content="Deep Cuts: five records you haven't heard, and why">
 <meta property="og:description" content="Found through real credits, labels and samples. Free, no sign-up.">
-<meta property="og:image" content="https://deepcuts-three.vercel.app/api/og">
+<meta property="og:image" content="https://deepcuts-three.vercel.app/api/og?v=2">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://deepcuts-three.vercel.app/api/og">
+<meta name="twitter:image" content="https://deepcuts-three.vercel.app/api/og?v=2">
 <title>Deep Cuts: five records you haven’t heard, and why</title>
 <style>[hidden]{display:none!important} img{max-width:100%} :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 <style>
@@ -742,6 +742,7 @@ function buildPrompt(seedList, mood, count = 5, avoid = []) {
     hasSeeds && seedList.length > 1 ? "First work out what these records have in common: country or city, language, scene, era, genre, label or sound. That shared ground is the core of the brief, so most picks should share it too. For example, two French records mean mostly French picks." : "",
     hasSeeds ? "Every pick must connect directly to one of the records listed above, not to anything else. Spread the picks across those records." : "",
     "Never recommend any of these exact albums, they already know them: " + [...seedList, ...known, ...nope, ...previous, ...avoid].join("; "),
+    digDepth > 0 && current?.picks?.length ? "This is a deeper dig: choose only artists that are NOT among these, already shown: " + [...new Set(current.picks.map((p) => p.artist))].join("; ") : "",
     "Rules:",
     digDepth > 0 ? "- This is a deeper dig: go further underground than usual, only records few collectors own." : "",
     digDepth === 0
@@ -1064,6 +1065,20 @@ async function gatherCandidates(seedList, onStep) {
   return { seeds, candidates: [...cands.values()] };
 }
 
+// ---------- Never repeat ----------
+// Records are compared loosely, so spelling differences don't let a repeat through:
+// "Somethin' Else" = "Somethin’ Else", "Vol. 1" = "Volume 1", "(Remastered)" ignored, "The" ignored.
+const normTitle = (t) => squash(String(t || "").replace(/\s*[\(\[][^)\]]*[\)\]]\s*/g, " ").replace(/\bvol(?:ume)?\.?\s*/gi, "vol "));
+const normArtist = (a) => squash(String(a || "").replace(/^the\s+/i, "").replace(/\s+\(\d+\)$/, ""));
+const seenKey = (p) => normArtist(p.artist) + "|" + normTitle(p.album);
+// Everything already shown or reacted to; on Dig deeper, also the artists already in this dig.
+function seenSets() {
+  const keys = new Set([...digHistory.flatMap((d) => d.picks), ...Object.values(reactions)].map(seenKey));
+  const artists = new Set(digDepth > 0 ? (current?.picks || []).map((p) => normArtist(p.artist)) : []);
+  return { keys, artists };
+}
+const isFresh = (p, S) => !S.keys.has(seenKey(p)) && !S.artists.has(normArtist(p.artist));
+
 // The kind of link behind a fact, so no single kind (like one big label) can fill a whole dig.
 const linkKind = (fact) => /^Sample source/.test(fact) ? "sample" : /label/i.test(fact) && /^Released on/.test(fact) ? "label"
   : /is credited on/.test(fact) ? "credit" : /side project/i.test(fact) ? "side" : /is linked to/.test(fact) ? "member" : "other";
@@ -1073,11 +1088,11 @@ const linkOf = (c) => { const f = (c.facts || [])[0] || ""; return kindOf(c) + "
 // Keep new artists only, put candidates linked to several records first, and keep the list varied.
 function rankCandidates(candidates, seeds, seedList) {
   const seedArtists = new Set(seeds.map((x) => lc(x.artist)).concat(seedList.map((x) => lc(splitSeed(x).artist))));
-  const seen = new Set([...digHistory.flatMap((d) => d.picks.map(keyOf)), ...Object.keys(reactions)]);
+  const S = seenSets();
   const perArtist = {};
   const score = (c) => c.facts.length + (c.sample ? 3 : 0) + 2 * ((c.from || []).length - 1) - (c.facts.every((f) => linkKind(f) === "label") ? 0.5 : 0);
   const ranked = candidates
-    .filter((c) => (c.rgId || c.dcId) && c.artist && !seedArtists.has(lc(c.artist)) && !seen.has(keyOf(c)) && !/various artists/i.test(c.artist))
+    .filter((c) => (c.rgId || c.dcId) && c.artist && !seedArtists.has(lc(c.artist)) && isFresh(c, S) && !/various artists/i.test(c.artist))
     .sort((a, b) => score(b) - score(a))
     .filter((c) => { const k = lc(c.artist); perArtist[k] = (perArtist[k] || 0) + 1; return perArtist[k] <= 2; });
   // At most 10 candidates per kind of link, so labels can't crowd out credits, members and samples.
@@ -1273,9 +1288,9 @@ async function vibeFromDiscogs(mood, onText) {
         facts: ["Found on Discogs under " + [sch.label ? "the " + sch.label + " label" : "", r.styles?.slice(0, 3).join(", ") || sch.style || sch.genre, r.country, r.year].filter(Boolean).join(", ")] });
     }
   }
-  const seen = new Set([...digHistory.flatMap((d) => d.picks.map(keyOf)), ...Object.keys(reactions)]);
+  const S = seenSets();
   const artists = new Set();
-  const cands = [...all.values()].filter((c) => !seen.has(keyOf(c)) && !artists.has(lc(c.artist)) && artists.add(lc(c.artist)));
+  const cands = [...all.values()].filter((c) => isFresh(c, S) && !artists.has(normArtist(c.artist)) && artists.add(normArtist(c.artist)));
   if (cands.length < 8) return [];
   // The most wanted records of each kind, laid out so every stretch of the list holds each kind.
   const lists = [["essential", 10], ["favourite", 14], ["deep", 16]].map(([t, n]) => cands.filter((c) => tierOf(c) === t).sort((a, b) => b.dc.want - a.dc.want).slice(0, n));
@@ -1706,6 +1721,9 @@ $("digForm").addEventListener("submit", async (e) => {
       picks = normalizePicks(await askClaude(prompt + "\nIMPORTANT: reply with the JSON array only. No headings, no explanation, no markdown.", { signal: ctl.signal, onText }));
     }
     if (!picks.length) throw { code: "invalid_json" };
+    // The AI is asked not to repeat earlier picks; make sure of it.
+    { const S = seenSets(), seenArtists = new Set(); picks = picks.filter((p) => isFresh(p, S) && !seenArtists.has(normArtist(p.artist)) && seenArtists.add(normArtist(p.artist))); }
+    if (!picks.length) throw { code: "none_verified" };
     if (verify) {
       setStatus("Checking how rare each record is on Discogs\u2026");
       if (await discogsRarity(picks, 10)) {
@@ -1725,12 +1743,14 @@ $("digForm").addEventListener("submit", async (e) => {
       checkReal.busy = 0;
       setStatus("Checking each record is a real album\u2026");
       let good = await checkReal(picks, (i, n) => { bar.style.width = (62 + i * (36 / n)) + "%"; });
+      { const S = seenSets(); good = good.filter((p) => isFresh(p, S)); } // MusicBrainz's spelling may reveal a repeat
       if (good.length < 5) {
         setStatus("Swapping out records that couldn't be confirmed\u2026");
         let more = [];
         try { more = normalizePicks(await askClaude(buildPrompt(seedList, mood, 5, picks.map((p) => p.artist + " \u2013 " + p.album)), { signal: ctl.signal })); }
         catch (e2) { if (e2?.code !== "invalid_json") throw e2; }
-        const fresh = more.filter((p) => !good.some((g) => g.artist.toLowerCase() === p.artist.toLowerCase()));
+        const S2 = seenSets();
+        const fresh = more.filter((p) => isFresh(p, S2) && !good.some((g) => normArtist(g.artist) === normArtist(p.artist)));
         good = good.concat(await checkReal(fresh, () => {}, 5 - good.length));
       }
       if (!good.length) throw { code: checkReal.busy >= 3 ? "mb_busy" : "none_verified" };
