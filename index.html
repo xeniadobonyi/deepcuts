@@ -439,7 +439,7 @@ function normalizePicks(res) {
     year: s(get(o, "year", "release_year", "released")).replace(/^null$/i, ""),
     label: s(get(o, "label", "record_label")).replace(/^null$/i, ""),
     thread: s(get(o, "thread", "connection", "tag", "match")),
-    why: s(get(o, "why", "reason", "explanation", "description"))
+    why: cleanWhy(s(get(o, "why", "reason", "explanation", "description")))
   })).filter((p) => p.artist && p.album).slice(0, 10);
 }
 
@@ -619,7 +619,7 @@ function render(picks, isExample, fresh, append) {
     if (p.thread) { const t = document.createElement("span"); t.className = "thread"; t.textContent = p.thread; top.append(t); }
     const why = document.createElement("p"); why.className = "why";
     const whyLabel = document.createElement("strong"); whyLabel.textContent = "Why this record: ";
-    why.append(whyLabel, document.createTextNode(p.why || ""));
+    why.append(whyLabel, document.createTextNode(cleanWhy(p.why)));
     const links = document.createElement("div"); links.className = "links";
     links.append(
       linkEl("YouTube", "https://www.youtube.com/results?search_query=" + q(p) + "+full+album"),
@@ -700,6 +700,17 @@ function render(picks, isExample, fresh, append) {
 
 let statusEl = "status"; // "Dig deeper" reports below the results instead of in the form
 let deeperNext = false;
+// The reasons must never carry links: drop any sentence with a web address (the AI sometimes invents them).
+const URL_RE = /\b(?:https?:\/\/|www\.)\S+|\b[\w-]+\.(?:com|org|net|io|fm)\/\S*/i;
+function cleanWhy(text) {
+  const t = String(text || "").trim();
+  if (!URL_RE.test(t)) return t;
+  // Mark each address first, so the dots inside it don't split sentences.
+  const marked = t.replace(new RegExp(URL_RE.source, "gi"), "\u0001");
+  const sentences = marked.match(/[^.!?]+[.!?]*(?:\s+|$)/g) || [marked];
+  const kept = sentences.filter((x) => !x.includes("\u0001")).join("").trim();
+  return kept || marked.replace(/\u0001/g, "").replace(/\s{2,}/g, " ").trim();
+}
 function setStatus(msg, err) { const s = $(statusEl); s.textContent = msg; s.classList.toggle("err", !!err); }
 
 // How every "why this record" should read: like a friend in a record shop, music first, no formula.
@@ -708,6 +719,7 @@ const WHY_STYLE = [
   "  Lead with something concrete about the record itself: a sound, an instrument, a production choice, a moment worth waiting for.",
   "  Mention the link naturally inside the text, never as the opening.",
   "  Never start with \"Because\", \"For\", \"If you\", \"This album\", the listener's search words or the name of their record.",
+  "  Never include links, URLs, web addresses or site names to visit.",
   "  Avoid filler and advert words: delivers, offers, journey, vibe, gem, timeless, perfect, showcases, blend, soundscape, gives you, a must.",
   "  Good example: \"Vini Reilly plays guitar like it's echoing down a stairwell, all space and no drums. Martin Hannett produced it, the same hand behind Unknown Pleasures.\""
 ].join("\n");
@@ -1125,7 +1137,7 @@ function pickFromPool(res, pool, max = 5) {
     artists.add(lc(c.artist));
     out.push({
       artist: c.artist, album: c.album, year: c.year || "", label: c.label || "",
-      thread: String(o.thread || "").trim(), why: String(o.why || o.reason || "").trim(),
+      thread: String(o.thread || "").trim(), why: cleanWhy(o.why || o.reason),
       rgId: c.rgId || "", cover: c.rgId ? "https://coverartarchive.org/release-group/" + c.rgId + "/front-250" : "",
       verified: c.rgId || c.dcId ? true : null, facts: c.facts, dcId: c.dcId || "",
       dc: c.dc || (c.dcId ? { url: "https://www.discogs.com/release/" + c.dcId, have: 0, want: 0, at: 0 } : null)
@@ -1993,7 +2005,7 @@ function fillCrateDetail(panel, p) {
   const b = document.createElement("b"); b.textContent = p.artist;
   name.append(b, document.createTextNode(" — "), Object.assign(document.createElement("i"), { textContent: p.album }));
   const meta = document.createElement("span"); meta.className = "meta"; meta.textContent = [p.year, p.label].filter(Boolean).join(" · ");
-  const why = document.createElement("p"); why.className = "why"; why.textContent = p.why || "";
+  const why = document.createElement("p"); why.className = "why"; why.textContent = cleanWhy(p.why);
   const links = document.createElement("div"); links.className = "links";
   links.append(
     linkEl("YouTube", "https://www.youtube.com/results?search_query=" + q(p) + "+full+album"),
