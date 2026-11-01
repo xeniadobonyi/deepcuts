@@ -12,9 +12,9 @@ module.exports = function handler(req, res) {
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").replace(/[^A-Za-z0-9.:-]/g, "");
   const origin = host ? "https://" + host : "";
 
-  const title = crate ? crate.name + " · a Deep Cuts crate" : "Deep Cuts";
+  const title = crate ? crate.name + " · a Deep Cuts crate" : "Deep Cuts: five records you haven't heard, and why";
   const list = crate ? crate.recs.slice(0, 4).map((r) => r.artist + " – " + r.album).join(", ") + (crate.recs.length > 4 ? " and " + (crate.recs.length - 4) + " more" : "") : "";
-  const description = crate ? crate.recs.length + " records: " + list + "." : "Five records you probably haven't heard, through real credits and labels, and why.";
+  const description = crate ? crate.recs.length + " records: " + list + "." : "Five records you haven't heard, and why. Found through real credits, labels and samples.";
   const image = origin + "/api/og" + (crate ? "?d=" + d : "");
   const target = crate ? "/#crate=" + d : "/";
 

@@ -38,7 +38,7 @@ module.exports = async function handler(req, res) {
     body = [
       brand,
       h("div", { display: "flex", flexDirection: "column", marginTop: 90 }, [
-        h("div", { fontSize: 78, lineHeight: 1.05 }, "Five records you probably haven’t heard."),
+        h("div", { fontSize: 78, lineHeight: 1.05 }, "Five records you haven’t heard."),
         h("div", { fontSize: 78, lineHeight: 1.05, color: "#ff2d95" }, "And why."),
         h("div", { fontSize: 30, color: "#5f5f5f", marginTop: 34 }, "Found through real credits, labels and samples. Free, no sign-up.")
       ])
