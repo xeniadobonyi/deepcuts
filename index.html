@@ -690,7 +690,7 @@ function render(picks, isExample, fresh, append) {
       nope: '<circle cx="12" cy="12" r="8"/><path d="M6.5 17.5l11-11"/>',
       known: '<path d="M5 12.5l4.5 4.5L19 7.5"/>'
     };
-    [["loved", "Loved it"], ["nope", "Not for me"]].forEach(([val, txt]) => {
+    [["loved", "Loved it"]].forEach(([val, txt]) => {
       const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.dataset.r = val;
       b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[val] + '</svg>';
       b.append(document.createTextNode(txt));
@@ -2302,7 +2302,7 @@ function renderProfile() {
 
   if (!rs.length) {
     const e = document.createElement("p"); e.className = "empty";
-    e.textContent = "Mark records as Loved it or Not for me. Your profile builds from those reactions.";
+    e.textContent = "Tap Loved it on records you love. Your profile builds from them.";
     box.append(e); return;
   }
 
@@ -2338,8 +2338,7 @@ function renderProfile() {
         wrap.append(...(i ? [", ", b] : [b]));
       });
       return wrap;
-    })()],
-    ["Not for you", nope.slice(0, 6).map((p) => p.artist).join(", ")]
+    })()]
   ].filter(([, v]) => v);
   if (rows.length) {
     const dl = document.createElement("dl"); dl.className = "facts";
