@@ -275,6 +275,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <div class="spin-info">
         <p class="spin-name" id="spinName"></p>
         <span class="spin-meta" id="spinMeta"></span>
+        <div class="react"><button type="button" class="chip" data-r="loved" id="spinLove" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/></svg><span id="spinLoveText">Loved it</span></button><span class="react-note" id="spinNote" aria-live="polite"></span></div>
       </div>
     </div>
     <p class="spin-why" id="spinWhy"></p>
@@ -1922,8 +1923,28 @@ function renderSpin() {
     img.onload = () => { if (spinNow === p) { label.style.backgroundImage = "url(\"" + img.src + "\")"; label.textContent = ""; } };
     img.src = "https://coverartarchive.org/release-group/" + p.rgId + "/front-250";
   }
+  setSpinLove();
+  $("spinNote").textContent = "";
   $("spinSec").hidden = false;
 }
+function setSpinLove() {
+  const on = !!spinNow && reactions[keyOf(spinNow)]?.r === "loved";
+  $("spinLove").setAttribute("aria-pressed", on ? "true" : "false");
+}
+// Loving the record on the turntable works like Loved it on a pick: into your crate, profile and level.
+$("spinLove").onclick = () => {
+  const p = spinNow; if (!p) return;
+  const k = keyOf(p), undo = reactions[k]?.r === "loved";
+  const levelBefore = diggerLevel();
+  if (undo) delete reactions[k];
+  else reactions[k] = { r: "loved", artist: p.artist, album: p.album, year: p.year || "", label: "", thread: "", cover: "", rgId: p.rgId || "", bars: 0, at: Date.now() };
+  store.set("dc-reactions", reactions);
+  renderHistory(); renderProfile(); renderCrate(); maybeAutoSummary();
+  if (!undo) queueCredits(k);
+  setSpinLove();
+  const lv = diggerLevel();
+  $("spinNote").textContent = undo ? "Removed from your crate." : "Saved to your crate." + (lv > levelBefore ? " Level up: " + LEVELS[lv].name + "!" : "");
+};
 $("spinNext").onclick = () => renderSpin();
 $("spinDig").onclick = () => { if (spinNow) digFromRecords([spinNow]); };
 $("spinListen").onclick = () => { if (spinNow) window.open("https://www.youtube.com/results?search_query=" + q(spinNow) + "+full+album", "_blank", "noopener"); };
