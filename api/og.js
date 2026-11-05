@@ -40,12 +40,24 @@ module.exports = async function handler(req, res) {
       h("div", { display: "flex", flexDirection: "column", gap, marginTop: 18, padding: n > 7 ? "14px 24px" : "20px 26px", border: "4px solid #111111", background: "#ffffff" }, rows)
     ];
   } else {
-    // The site's own preview: the name and an invitation, white on neon pink.
-    const img = new ImageResponse(
-      h("div", { width: "100%", height: "100%", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, background: "#ff2d95", color: "#ffffff" }, [
-        h("div", { fontSize: 150, letterSpacing: -3, fontFamily: "Geist", fontWeight: 700 }, "deep cuts"),
-        h("div", { fontSize: 64, fontFamily: "Geist", fontWeight: 400 }, "Pick a record.")
+    // The site's own preview: an original record sleeve with the vinyl sliding out, like a record pulled from a crate.
+    const ring = (size, color) => h("div", { position: "absolute", left: (520 - size) / 2, top: (520 - size) / 2, width: size, height: size, borderRadius: size / 2, border: "2px solid " + color }, []);
+    const vinyl = h("div", { position: "absolute", left: 470, top: 55, width: 520, height: 520, borderRadius: 260, background: "#111111" }, [
+      ring(470, "#2a2a2a"), ring(420, "#262626"), ring(370, "#2a2a2a"), ring(320, "#262626"), ring(270, "#2a2a2a"),
+      h("div", { position: "absolute", left: 175, top: 175, width: 170, height: 170, borderRadius: 85, background: "#ff2d95", alignItems: "center", justifyContent: "center" },
+        h("div", { width: 14, height: 14, borderRadius: 7, background: "#ececec" }, []))
+    ]);
+    const sleeve = h("div", { position: "absolute", left: 190, top: 55, width: 520, height: 520, background: "#ff2d95", flexDirection: "column", justifyContent: "space-between", padding: "34px 36px", boxShadow: "8px 8px 0 #111111" }, [
+      h("div", { justifyContent: "space-between", fontFamily: "Geist", fontWeight: 400, fontSize: 22, color: "#111111", letterSpacing: 2 }, [
+        h("div", {}, "DC-001"), h("div", {}, "33\u2153 RPM")
       ]),
+      h("div", { flexDirection: "column", gap: 10 }, [
+        h("div", { fontFamily: "Geist", fontWeight: 700, fontSize: 112, lineHeight: 0.92, letterSpacing: -4, color: "#111111", flexDirection: "column" }, [h("div", {}, "deep"), h("div", {}, "cuts")]),
+        h("div", { fontFamily: "Geist", fontWeight: 400, fontSize: 26, color: "#111111" }, "Pick a record.")
+      ])
+    ]);
+    const img = new ImageResponse(
+      h("div", { width: "100%", height: "100%", position: "relative", background: "#ececec" }, [vinyl, sleeve]),
       { width: 1200, height: 630, fonts: bold ? [{ name: "Geist", data: regular, weight: 400, style: "normal" }, { name: "Geist", data: bold, weight: 700, style: "normal" }] : undefined }
     );
     const buf = Buffer.from(await img.arrayBuffer());
