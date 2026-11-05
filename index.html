@@ -179,6 +179,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .spin-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .spin-name { margin: 0; font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; }
 .spin-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.spin-from { font-size: 14px; color: var(--muted); }
 .spin-why { margin: 0; max-width: 62ch; }
 .spin-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .share-row { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
@@ -1857,20 +1858,20 @@ $("digDeeper").onclick = () => {
 // so it never slows the page. Only the cover image loads, in the background.
 // First visits get a shop pick; once someone has dug, records their digs found but didn't show take over.
 const SHOP_PICKS = [
-  { artist: "Bill Evans Trio", album: "Sunday at the Village Vanguard", year: "1961", why: "Recorded live on a Sunday in June 1961, with Scott LaFaro's bass talking back to the piano. Eleven days later he was gone." },
-  { artist: "Shuggie Otis", album: "Inspiration Information", year: "1974", why: "Warm, hazy soul that Otis played almost entirely by himself, an early drum machine ticking under the strings." },
-  { artist: "The Durutti Column", album: "The Return of the Durutti Column", year: "1980", why: "Vini Reilly's guitar echoes like it's down a stairwell, all space and no drums. Martin Hannett produced it for Factory." },
-  { artist: "Arthur Verocai", album: "Arthur Verocai", year: "1972", why: "Brazilian strings, fuzz guitar and soft voices. A flop on release, later treasured by crate diggers and sampled by hip-hop producers." },
-  { artist: "Minnie Riperton", album: "Come to My Garden", year: "1970", why: "Her five-octave voice floats over Charles Stepney's lush orchestral arrangements. Years ahead of its time." },
-  { artist: "Young Marble Giants", album: "Colossal Youth", year: "1980", why: "Organ, bass, a drum machine and a voice barely above a whisper. Post-punk with all the noise taken out." },
-  { artist: "Galt MacDermot", album: "Shapes of Rhythm", year: "1966", why: "Tight, funky jazz with drums so crisp producers kept coming back. Its track \u201cSpace\u201d became the loop behind Busta Rhymes' \u201cWoo Hah!! Got You All in Check\u201d." },
-  { artist: "Labi Siffre", album: "Remember My Song", year: "1975", why: "Gentle, soulful songwriting from London. \u201cI Got The\u2026\u201d gave Eminem the loop for \u201cMy Name Is\u201d." },
-  { artist: "Jaylib", album: "Champion Sound", year: "2003", why: "Madlib and J Dilla trading beats and verses over loose, dusty loops, each producing the other." },
-  { artist: "The Lijadu Sisters", album: "Horizon Unlimited", year: "1979", why: "Nigerian twin sisters singing in close harmony over hypnotic Afro-funk and reggae grooves." },
-  { artist: "Ryo Fukui", album: "Scenery", year: "1976", why: "A self-taught Japanese pianist's debut: lyrical, swinging trio jazz that found a whole new audience decades later." },
-  { artist: "Marcos Valle", album: "Previs\u00e3o do Tempo", year: "1973", why: "Breezy Brazilian pop shot through with synths and funk, with members of Azymuth in the band." },
-  { artist: "Cymande", album: "Cymande", year: "1972", why: "A London band of Caribbean musicians blending funk, soul and reggae into something all their own. Hip-hop producers love it." },
-  { artist: "Hiroshi Yoshimura", album: "Music for Nine Post Cards", year: "1982", why: "Gentle Japanese ambient made with a Fender Rhodes and little else. Music that makes a room feel calmer." }
+  { artist: "Bill Evans Trio", album: "Sunday at the Village Vanguard", year: "1961", song: "Gloria's Step", why: "Recorded live on a Sunday in June 1961, with Scott LaFaro's bass talking back to the piano. Eleven days later he was gone." },
+  { artist: "Shuggie Otis", album: "Inspiration Information", year: "1974", song: "Inspiration Information", why: "Warm, hazy soul that Otis played almost entirely by himself, an early drum machine ticking under the strings." },
+  { artist: "The Durutti Column", album: "The Return of the Durutti Column", year: "1980", song: "Sketch for Summer", why: "Vini Reilly's guitar echoes like it's down a stairwell, all space and no drums. Martin Hannett produced it for Factory." },
+  { artist: "Arthur Verocai", album: "Arthur Verocai", year: "1972", song: "Na Boca do Sol", why: "Brazilian strings, fuzz guitar and soft voices. A flop on release, later treasured by crate diggers and sampled by hip-hop producers." },
+  { artist: "Minnie Riperton", album: "Come to My Garden", year: "1970", song: "Les Fleurs", why: "Her five-octave voice floats over Charles Stepney's lush orchestral arrangements. Years ahead of its time." },
+  { artist: "Young Marble Giants", album: "Colossal Youth", year: "1980", song: "Final Day", why: "Organ, bass, a drum machine and a voice barely above a whisper. Post-punk with all the noise taken out." },
+  { artist: "Galt MacDermot", album: "Shapes of Rhythm", year: "1966", song: "Space", why: "Tight, funky jazz with drums so crisp producers kept coming back. Its track \u201cSpace\u201d became the loop behind Busta Rhymes' \u201cWoo Hah!! Got You All in Check\u201d." },
+  { artist: "Labi Siffre", album: "Remember My Song", year: "1975", song: "I Got The\u2026", why: "Gentle, soulful songwriting from London. \u201cI Got The\u2026\u201d gave Eminem the loop for \u201cMy Name Is\u201d." },
+  { artist: "Jaylib", album: "Champion Sound", year: "2003", song: "McNasty Filth", why: "Madlib and J Dilla trading beats and verses over loose, dusty loops, each producing the other." },
+  { artist: "The Lijadu Sisters", album: "Horizon Unlimited", year: "1979", song: "Orere Elejigbo", why: "Nigerian twin sisters singing in close harmony over hypnotic Afro-funk and reggae grooves." },
+  { artist: "Ryo Fukui", album: "Scenery", year: "1976", song: "Scenery", why: "A self-taught Japanese pianist's debut: lyrical, swinging trio jazz that found a whole new audience decades later." },
+  { artist: "Marcos Valle", album: "Previs\u00e3o do Tempo", year: "1973", song: "Mentira", why: "Breezy Brazilian pop shot through with synths and funk, with members of Azymuth in the band." },
+  { artist: "Cymande", album: "Cymande", year: "1972", song: "Bra", why: "A London band of Caribbean musicians blending funk, soul and reggae into something all their own. Hip-hop producers love it." },
+  { artist: "Hiroshi Yoshimura", album: "Music for Nine Post Cards", year: "1982", song: "Water Copy", why: "Gentle Japanese ambient made with a Fender Rhodes and little else. Music that makes a room feel calmer." }
 ];
 const SPIN_POOL_MAX = 80;
 let spinPool = store.get("dc-spin-pool", []);
@@ -1909,10 +1910,7 @@ function renderSpin() {
   spinNow = p;
   store.set("dc-spin-last", seenKey(p));
   $("spinSource").textContent = p.mine ? "Spinning for you" : "Tonight's pick from the shop";
-  const name = $("spinName"); name.replaceChildren();
-  const b = document.createElement("b"); b.textContent = p.artist;
-  const i = document.createElement("i"); i.textContent = p.album;
-  name.append(b, document.createElement("br"), i);
+  showSpinTitle(p);
   $("spinMeta").textContent = [p.tier ? TIER_NAMES[p.tier] : "", p.year].filter(Boolean).join(" \u00b7 ");
   // A spare from your digs: its real link is the reason ("Paul Motian is credited on … and made this record").
   const link = cleanWhy(p.link).replace(/\.?$/, ".");
@@ -1923,16 +1921,46 @@ function renderSpin() {
     img.onload = () => { if (spinNow === p) { label.style.backgroundImage = "url(\"" + img.src + "\")"; label.textContent = ""; } };
     img.src = "https://coverartarchive.org/release-group/" + p.rgId + "/front-250";
   }
-  // Listen anywhere: the same links as every pick.
-  $("spinLinks").replaceChildren(
-    linkEl("YouTube", "https://www.youtube.com/results?search_query=" + q(p) + "+full+album"),
-    linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
-    linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
-    linkEl("Discogs", p.dcId ? "https://www.discogs.com/release/" + p.dcId : "https://www.discogs.com/search/?type=all&q=" + q(p))
-  );
   setSpinLove();
+  findSpinSong(p);
   $("spinNote").textContent = "";
   $("spinSec").hidden = false;
+}
+// The turntable plays a song: the record's standout track (shop picks) or its opening track (your digs).
+function showSpinTitle(p) {
+  const name = $("spinName"); name.replaceChildren();
+  if (p.song) {
+    const t = document.createElement("b"); t.textContent = "\u201c" + p.song + "\u201d";
+    const by = document.createElement("span"); by.textContent = p.artist;
+    const from = document.createElement("span"); from.className = "spin-from";
+    from.append("from ", Object.assign(document.createElement("i"), { textContent: p.album }), p.songNote ? " \u00b7 " + p.songNote : "");
+    name.append(t, document.createElement("br"), by, document.createElement("br"), from);
+  } else {
+    const b = document.createElement("b"); b.textContent = p.artist;
+    const i = document.createElement("i"); i.textContent = p.album;
+    name.append(b, document.createElement("br"), i);
+  }
+  const q2 = encodeURIComponent(p.artist + " " + (p.song || p.album));
+  $("spinLinks").replaceChildren(
+    linkEl("YouTube", "https://www.youtube.com/results?search_query=" + q2 + (p.song ? "" : "+full+album")),
+    linkEl("Spotify", "https://open.spotify.com/search/" + q2),
+    linkEl("Apple Music", "https://music.apple.com/search?term=" + q2),
+    linkEl("Discogs", p.dcId ? "https://www.discogs.com/release/" + p.dcId : "https://www.discogs.com/search/?type=all&q=" + q(p))
+  );
+}
+// For records from your digs: look up the opening track on MusicBrainz in the background, then remember it.
+async function findSpinSong(p) {
+  if (!API_URL || sample || p.song || !p.rgId) return;
+  try {
+    const list = await mbQuick("release", { "release-group": p.rgId, limit: 1 });
+    const id = list?.releases?.[0]?.id; if (!id) return;
+    const rel = await mbQuick("release/" + id, { inc: "recordings" });
+    const t = rel?.media?.[0]?.tracks?.[0]; const title = t?.title || t?.recording?.title;
+    if (!title) return;
+    const k = seenKey(p), entry = spinPool.find((x) => seenKey(x) === k);
+    if (entry) { entry.song = title; entry.songNote = "side A, track 1"; store.set("dc-spin-pool", spinPool); }
+    if (spinNow && seenKey(spinNow) === k) { spinNow.song = title; spinNow.songNote = "side A, track 1"; showSpinTitle(spinNow); }
+  } catch {}
 }
 function setSpinLove() {
   const on = !!spinNow && reactions[keyOf(spinNow)]?.r === "loved";
