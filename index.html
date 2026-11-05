@@ -322,7 +322,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     </div>
   </form>
 
-  <section style="display:flex;flex-direction:column;gap:14px">
+  <section id="digSec" style="display:flex;flex-direction:column;gap:14px">
     <div class="crate-head">
       <h2 id="crateTitle">This week's dig</h2>
       <span class="example-flag" id="exampleFlag">(example)</span>
@@ -333,6 +333,11 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="status" id="deepStatus" role="status" aria-live="polite"></div>
   </section>
 
+  <section id="pastSec" hidden>
+    <h2 class="sec-title">Past digs</h2>
+    <div class="past" id="past"></div>
+  </section>
+
   <section>
     <h2 class="sec-title">Taste profile</h2>
     <div class="profile" id="profile"></div>
@@ -341,11 +346,6 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
   <section>
     <h2 class="sec-title">Your crates <span class="crate-count" id="crateCount"></span></h2>
     <div class="crates" id="loved"></div>
-  </section>
-
-  <section id="pastSec" hidden>
-    <h2 class="sec-title">Past digs</h2>
-    <div class="past" id="past"></div>
   </section>
 
   <section id="howSec">
@@ -1813,6 +1813,7 @@ $("digForm").addEventListener("submit", async (e) => {
     store.set("dc-history", digHistory);
     renderHistory();
     renderProfile();
+    $("digSec").hidden = false;
     render(picks, false, true, deeper);
     setStatus((fromData ? picks.length + (seedList.length ? " real records, each found through real credits and labels. " : " real records, found on Discogs for your vibe. ")
       : dropped ? "Only " + picks.length + " records could be confirmed as real albums, so that\u2019s all this dig shows. "
@@ -2129,11 +2130,8 @@ setDigMode();
 while (seeds().length < MAX_SEEDS) addSeedField(""); // all three fields, each with its example
 updateSeedHints();
 const shortDate = (iso) => { try { return iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : ""; } catch { return ""; } };
-if (current?.picks?.length) {
-  render(current.picks, false, false);
-  const when = shortDate(current.date || digHistory[0]?.date);
-  $("crateTitle").textContent = "Your last dig" + (when ? " \u00b7 " + when : "");
-}
+// On load there is no "last dig": returning visitors see Past digs in its place, first visits see the sample dig.
+if (digHistory.length || current?.picks?.length) $("digSec").hidden = true;
 else render(EXAMPLE.picks, true, false);
 renderHistory();
 renderProfile();
@@ -2247,9 +2245,9 @@ function renderHistory() {
       li.append(b, document.createTextNode(" — "), Object.assign(document.createElement("i"), { textContent: p.album }), m);
       ul.append(li);
     });
-    const open = document.createElement("button"); open.type = "button"; open.className = "btn ghost open-dig"; open.textContent = "Show this dig above";
+    const open = document.createElement("button"); open.type = "button"; open.className = "btn ghost open-dig"; open.textContent = "Open this dig";
     open.onclick = () => {
-      current = { picks: d.picks, seeds: d.seeds, mood: d.mood, date: d.date }; render(d.picks, false, false);
+      current = { picks: d.picks, seeds: d.seeds, mood: d.mood, date: d.date }; $("digSec").hidden = false; render(d.picks, false, false);
       const when = shortDate(d.date); $("crateTitle").textContent = "Dig from " + (when || "earlier");
       $("crateTitle").scrollIntoView({ behavior: "smooth", block: "start" });
     };
