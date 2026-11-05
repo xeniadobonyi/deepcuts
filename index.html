@@ -279,9 +279,9 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       </div>
     </div>
     <p class="spin-why" id="spinWhy"></p>
+    <div class="links" id="spinLinks" aria-label="Listen to this record"></div>
     <div class="spin-actions">
       <button type="button" class="btn" id="spinDig">Dig from this record →</button>
-      <button type="button" class="btn ghost" id="spinListen">Listen</button>
       <button type="button" class="btn ghost" id="spinNext">Next record</button>
     </div>
   </section>
@@ -1923,6 +1923,13 @@ function renderSpin() {
     img.onload = () => { if (spinNow === p) { label.style.backgroundImage = "url(\"" + img.src + "\")"; label.textContent = ""; } };
     img.src = "https://coverartarchive.org/release-group/" + p.rgId + "/front-250";
   }
+  // Listen anywhere: the same links as every pick.
+  $("spinLinks").replaceChildren(
+    linkEl("YouTube", "https://www.youtube.com/results?search_query=" + q(p) + "+full+album"),
+    linkEl("Spotify", "https://open.spotify.com/search/" + q(p)),
+    linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
+    linkEl("Discogs", p.dcId ? "https://www.discogs.com/release/" + p.dcId : "https://www.discogs.com/search/?type=all&q=" + q(p))
+  );
   setSpinLove();
   $("spinNote").textContent = "";
   $("spinSec").hidden = false;
@@ -1947,7 +1954,6 @@ $("spinLove").onclick = () => {
 };
 $("spinNext").onclick = () => renderSpin();
 $("spinDig").onclick = () => { if (spinNow) digFromRecords([spinNow]); };
-$("spinListen").onclick = () => { if (spinNow) window.open("https://www.youtube.com/results?search_query=" + q(spinNow) + "+full+album", "_blank", "noopener"); };
 
 // ---------- Sharing a crate as a link ----------
 // The whole crate travels in the link (#crate=…): no account, no server. Up to 10 records and a name.
