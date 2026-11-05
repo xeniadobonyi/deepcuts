@@ -51,10 +51,7 @@ module.exports = async function handler(req, res) {
       h("div", { justifyContent: "space-between", fontFamily: "Geist", fontWeight: 400, fontSize: 22, color: "#111111", letterSpacing: 2 }, [
         h("div", {}, "DC-001"), h("div", {}, "33\u2153 RPM")
       ]),
-      h("div", { flexDirection: "column", gap: 10 }, [
-        h("div", { fontFamily: "Geist", fontWeight: 700, fontSize: 112, lineHeight: 0.92, letterSpacing: -4, color: "#111111", flexDirection: "column" }, [h("div", {}, "deep"), h("div", {}, "cuts")]),
-        h("div", { fontFamily: "Geist", fontWeight: 400, fontSize: 26, color: "#111111" }, "Pick a record.")
-      ])
+      h("div", { fontFamily: "Geist", fontWeight: 700, fontSize: 112, lineHeight: 0.92, letterSpacing: -4, color: "#111111", flexDirection: "column" }, [h("div", {}, "deep"), h("div", {}, "cuts")])
     ]);
     const img = new ImageResponse(
       h("div", { width: "100%", height: "100%", position: "relative", background: "#ececec" }, [vinyl, sleeve]),
