@@ -1895,24 +1895,39 @@ function saveSpare(picks, label) {
   spinPool = spare.filter((x) => !have.has(seenKey(x))).concat(spinPool).slice(0, SPIN_POOL_MAX);
   store.set("dc-spin-pool", spinPool);
 }
+// Remembers the last records spun so a refresh rotates through everything before anything comes back.
+const SPIN_PLAYED_MAX = 60;
 function pickSpin() {
-  const S = seenSets(), last = store.get("dc-spin-last", "");
-  const fresh = (list) => list.filter((x) => isFresh(x, { keys: S.keys, artists: new Set() }) && seenKey(x) !== last);
-  const mine = fresh(spinPool);
-  if (mine.length) {
-    // Newer finds first, with some chance: pick from the 12 most recent.
-    const top = mine.slice(0, 12);
-    return { ...top[Math.floor(Math.random() * top.length)], mine: true };
-  }
-  const shop = fresh(SHOP_PICKS);
-  const list = shop.length ? shop : SHOP_PICKS;
-  return { ...list[Math.floor(Math.random() * list.length)], mine: false };
+  const S = seenSets();
+  const played = store.get("dc-spin-played", []);
+  const notSeen = (list) => list.filter((x) => isFresh(x, { keys: S.keys, artists: new Set() }));
+  const mine = notSeen(spinPool).map((x) => ({ ...x, mine: true }));
+  const shop = notSeen(SHOP_PICKS).map((x) => ({ ...x, mine: false }));
+  const unplayed = (list) => list.filter((x) => !played.includes(seenKey(x)));
+  const any = (list) => list[Math.floor(Math.random() * list.length)];
+  // Your own finds come first most of the time; the shop fills in so it never feels like a loop.
+  const m = unplayed(mine), sh = unplayed(shop);
+  if (m.length && (!sh.length || Math.random() < 0.75)) return any(m);
+  if (sh.length) return any(sh);
+  // Everything has been played: bring back whatever was played longest ago, never the one just heard.
+  const all = mine.concat(shop.length ? shop : SHOP_PICKS.map((x) => ({ ...x, mine: false })));
+  const last = played[played.length - 1];
+  const pool = all.filter((x) => seenKey(x) !== last);
+  pool.sort((a, b) => played.indexOf(seenKey(a)) - played.indexOf(seenKey(b)));
+  return pool[0] || any(all);
+}
+function notePlayed(p) {
+  const k = seenKey(p);
+  const played = store.get("dc-spin-played", []).filter((x) => x !== k);
+  played.push(k);
+  store.set("dc-spin-played", played.slice(-SPIN_PLAYED_MAX));
 }
 function renderSpin() {
   const p = pickSpin();
   if (!p) return;
   spinNow = p;
   store.set("dc-spin-last", seenKey(p));
+  notePlayed(p);
   $("spinSource").textContent = p.mine ? "Spinning for you" : "Tonight's pick from the shop";
   showSpinTitle(p);
   $("spinMeta").textContent = [p.tier ? TIER_NAMES[p.tier] : "", p.year].filter(Boolean).join(" \u00b7 ");
