@@ -164,6 +164,8 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .pick.is-unverified .sleeve { opacity: .45; }
 .crates { display: flex; flex-direction: column; gap: 28px; }
 .crate-box { display: flex; flex-direction: column; gap: 10px; }
+.community { margin: 0; font-size: 14px; color: var(--muted); max-width: 62ch; }
+.community a { color: inherit; }
 .spin { display: flex; flex-direction: column; gap: 12px; background: var(--surface); border: 1px solid var(--fg); padding: 16px; }
 .wrap > .spin { padding-top: 16px; }
 .spin-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -331,6 +333,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <button type="button" class="btn ghost dig-deeper" id="digDeeper" hidden>Dig deeper: 5 more like this</button>
     <div class="progress" id="deepProgress" hidden role="progressbar" aria-label="Dig deeper progress" aria-valuemin="0" aria-valuemax="5"><div class="bar" id="deepBar"></div></div>
     <div class="status" id="deepStatus" role="status" aria-live="polite"></div>
+    <p class="community">Every record here was found through credits and collections shared by music lovers on <a href="https://musicbrainz.org" target="_blank" rel="noopener">MusicBrainz</a> and <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>.</p>
   </section>
 
   <section id="pastSec" hidden>
@@ -350,6 +353,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 
   <section id="howSec">
     <h2 class="sec-title">How it works</h2>
+    <p class="community">Every record here was found through credits and collections shared by music lovers on <a href="https://musicbrainz.org" target="_blank" rel="noopener">MusicBrainz</a> and <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>.</p>
     <ol class="how">
       <li><b>Start from records you love, or a vibe.</b> An album, a song or an artist, or words like a place, a decade and a mood.</li>
       <li><b>It follows real links.</b> The musicians and producers on your record, its label, band members and the records it samples, from MusicBrainz and Discogs. A vibe becomes Discogs searches by style, country and years.</li>
