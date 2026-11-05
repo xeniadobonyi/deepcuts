@@ -164,6 +164,23 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .pick.is-unverified .sleeve { opacity: .45; }
 .crates { display: flex; flex-direction: column; gap: 28px; }
 .crate-box { display: flex; flex-direction: column; gap: 10px; }
+.spin { display: flex; flex-direction: column; gap: 12px; background: var(--surface); border: 1px solid var(--fg); padding: 16px; }
+.wrap > .spin { padding-top: 16px; }
+.spin-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.spin-title { margin: 0; font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.spin-source { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.spin-body { display: flex; gap: 16px; align-items: center; }
+.spin-deck { width: 120px; height: 120px; flex-shrink: 0; }
+.spin-disc { position: relative; width: 100%; height: 100%; border-radius: 50%; background: repeating-radial-gradient(circle, #1d1d1d 0 2px, #111 2px 4px); display: flex; align-items: center; justify-content: center; animation: dc-spin 6s linear infinite; }
+.spin-label { width: 46%; height: 46%; border-radius: 50%; background: var(--pink) center / cover no-repeat; overflow: hidden; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 7px; font-weight: 700; color: #111; text-align: center; line-height: 1.2; padding: 4px; box-sizing: border-box; }
+.spin-hole { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--surface); }
+@keyframes dc-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin-disc { animation: none; } }
+.spin-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.spin-name { margin: 0; font-size: 17px; line-height: 1.25; overflow-wrap: anywhere; }
+.spin-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.spin-why { margin: 0; max-width: 62ch; }
+.spin-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .share-row { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .share-panel { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 420px; border: 1px solid var(--rule); background: var(--surface); padding: 12px; box-sizing: border-box; }
 .share-panel label { font-size: 13px; color: var(--muted); }
@@ -243,6 +260,28 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="actions">
       <button type="button" class="btn" id="sharedDig">Dig from this crate</button>
       <button type="button" class="btn ghost" id="sharedOwn">Make your own crate</button>
+    </div>
+  </section>
+
+  <section id="spinSec" class="spin" aria-labelledby="spinHead" hidden>
+    <div class="spin-head">
+      <h2 id="spinHead" class="spin-title">Now spinning</h2>
+      <span class="spin-source" id="spinSource"></span>
+    </div>
+    <div class="spin-body">
+      <div class="spin-deck" aria-hidden="true">
+        <div class="spin-disc" id="spinDisc"><div class="spin-label" id="spinLabel"></div><div class="spin-hole"></div></div>
+      </div>
+      <div class="spin-info">
+        <p class="spin-name" id="spinName"></p>
+        <span class="spin-meta" id="spinMeta"></span>
+      </div>
+    </div>
+    <p class="spin-why" id="spinWhy"></p>
+    <div class="spin-actions">
+      <button type="button" class="btn" id="spinDig">Dig from this record →</button>
+      <button type="button" class="btn ghost" id="spinListen">Listen</button>
+      <button type="button" class="btn ghost" id="spinNext">Next record</button>
     </div>
   </section>
 
@@ -1296,6 +1335,7 @@ async function vibeFromDiscogs(mood, onText) {
   const lists = [["essential", 10], ["favourite", 14], ["deep", 16]].map(([t, n]) => cands.filter((c) => tierOf(c) === t).sort((a, b) => b.dc.want - a.dc.want).slice(0, n));
   const pool = [];
   for (let r = 0; r < 20; r++) for (const l of lists) if (l[r]) pool.push(l[r]);
+  lastPool = pool;
   setStatus("Choosing the best five from " + pool.length + " real records\u2026");
   let res = null;
   try { res = await askClaude(buildVibeDataPrompt(mood, pool, place), { signal: ctl.signal, onText }); }
@@ -1639,6 +1679,7 @@ $("digForm").addEventListener("submit", async (e) => {
   closeSuggest();
   const deeper = deeperNext && !!current; deeperNext = false;
   digDepth = deeper ? (current.depth || 0) + 1 : 0;
+  lastPool = [];
   seedFacts = [];
   statusEl = deeper ? "deepStatus" : "status";
   $(deeper ? "status" : "deepStatus").textContent = "";
@@ -1678,6 +1719,7 @@ $("digForm").addEventListener("submit", async (e) => {
         const { seeds: seedInfo, candidates } = await gatherCandidates(seedList, (msg) => setStatus(msg));
         seedFacts = seedInfo.map((x) => (x.song ? x.artist + ", the song \u201c" + x.song + "\u201d" + (x.album ? " from " + x.album : "") : x.artist + (x.album ? " \u2013 " + x.album : "")) + " (" + [x.year, x.label?.name, x.tags.join(", ")].filter(Boolean).join("; ") + ")");
         let pool = rankCandidates(candidates, seedInfo, seedList);
+        lastPool = pool;
         if (pool.length >= 5) {
           setStatus("Checking how rare each record is on Discogs\u2026");
           if (await discogsRarity(pool, 24)) {
@@ -1762,6 +1804,7 @@ $("digForm").addEventListener("submit", async (e) => {
     if (limited()) countDig();
     const earlier = deeper ? current.picks || [] : [];
     current = { picks: earlier.concat(picks), seeds: seedList, mood, depth: digDepth, date: new Date().toISOString() };
+    try { saveSpare(current.picks, seedList.length ? seedList.join(", ") : mood); } catch {}
     store.set("dc-last", current);
     digHistory.unshift({ date: new Date().toISOString(), seeds: seedList, mood, picks });
     digHistory = digHistory.slice(0, 30);
@@ -1807,6 +1850,83 @@ $("digDeeper").onclick = () => {
   const form = $("digForm");
   if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event("submit", { cancelable: true }));
 };
+
+// ---------- Now spinning: a recommended record on every visit ----------
+// Chosen from data already in this browser, after the page has drawn: no AI call and no lookup,
+// so it never slows the page. Only the cover image loads, in the background.
+// First visits get a shop pick; once someone has dug, records their digs found but didn't show take over.
+const SHOP_PICKS = [
+  { artist: "Bill Evans Trio", album: "Sunday at the Village Vanguard", year: "1961", why: "Recorded live on a Sunday in June 1961, with Scott LaFaro's bass talking back to the piano. Eleven days later he was gone." },
+  { artist: "Shuggie Otis", album: "Inspiration Information", year: "1974", why: "Warm, hazy soul that Otis played almost entirely by himself, an early drum machine ticking under the strings." },
+  { artist: "The Durutti Column", album: "The Return of the Durutti Column", year: "1980", why: "Vini Reilly's guitar echoes like it's down a stairwell, all space and no drums. Martin Hannett produced it for Factory." },
+  { artist: "Arthur Verocai", album: "Arthur Verocai", year: "1972", why: "Brazilian strings, fuzz guitar and soft voices. A flop on release, later treasured by crate diggers and sampled by hip-hop producers." },
+  { artist: "Minnie Riperton", album: "Come to My Garden", year: "1970", why: "Her five-octave voice floats over Charles Stepney's lush orchestral arrangements. Years ahead of its time." },
+  { artist: "Young Marble Giants", album: "Colossal Youth", year: "1980", why: "Organ, bass, a drum machine and a voice barely above a whisper. Post-punk with all the noise taken out." },
+  { artist: "Galt MacDermot", album: "Shapes of Rhythm", year: "1966", why: "Tight, funky jazz with drums so crisp producers kept coming back. Its track \u201cSpace\u201d became the loop behind Busta Rhymes' \u201cWoo Hah!! Got You All in Check\u201d." },
+  { artist: "Labi Siffre", album: "Remember My Song", year: "1975", why: "Gentle, soulful songwriting from London. \u201cI Got The\u2026\u201d gave Eminem the loop for \u201cMy Name Is\u201d." },
+  { artist: "Jaylib", album: "Champion Sound", year: "2003", why: "Madlib and J Dilla trading beats and verses over loose, dusty loops, each producing the other." },
+  { artist: "The Lijadu Sisters", album: "Horizon Unlimited", year: "1979", why: "Nigerian twin sisters singing in close harmony over hypnotic Afro-funk and reggae grooves." },
+  { artist: "Ryo Fukui", album: "Scenery", year: "1976", why: "A self-taught Japanese pianist's debut: lyrical, swinging trio jazz that found a whole new audience decades later." },
+  { artist: "Marcos Valle", album: "Previs\u00e3o do Tempo", year: "1973", why: "Breezy Brazilian pop shot through with synths and funk, with members of Azymuth in the band." },
+  { artist: "Cymande", album: "Cymande", year: "1972", why: "A London band of Caribbean musicians blending funk, soul and reggae into something all their own. Hip-hop producers love it." },
+  { artist: "Hiroshi Yoshimura", album: "Music for Nine Post Cards", year: "1982", why: "Gentle Japanese ambient made with a Fender Rhodes and little else. Music that makes a room feel calmer." }
+];
+const SPIN_POOL_MAX = 80;
+let spinPool = store.get("dc-spin-pool", []);
+if (!Array.isArray(spinPool)) spinPool = [];
+let spinNow = null;
+let lastPool = []; // the candidates of the dig in progress, so the ones not shown can spin later
+
+// After a dig: keep the real records it found but didn't show.
+function saveSpare(picks, label) {
+  const shown = new Set(picks.map(seenKey));
+  const spare = lastPool.filter((c) => !shown.has(seenKey(c)) && (c.rgId || c.dcId) && c.artist && c.album).slice(0, 20).map((c) => ({
+    artist: c.artist, album: c.album, year: c.year || "", rgId: c.rgId || "", dcId: c.dcId || "",
+    tier: tierOf(c), link: String((c.facts || [])[0] || "").slice(0, 200), from: String(label || "").slice(0, 120), at: Date.now()
+  }));
+  if (!spare.length) return;
+  const have = new Set(spinPool.map(seenKey));
+  spinPool = spare.filter((x) => !have.has(seenKey(x))).concat(spinPool).slice(0, SPIN_POOL_MAX);
+  store.set("dc-spin-pool", spinPool);
+}
+function pickSpin() {
+  const S = seenSets(), last = store.get("dc-spin-last", "");
+  const fresh = (list) => list.filter((x) => isFresh(x, { keys: S.keys, artists: new Set() }) && seenKey(x) !== last);
+  const mine = fresh(spinPool);
+  if (mine.length) {
+    // Newer finds first, with some chance: pick from the 12 most recent.
+    const top = mine.slice(0, 12);
+    return { ...top[Math.floor(Math.random() * top.length)], mine: true };
+  }
+  const shop = fresh(SHOP_PICKS);
+  const list = shop.length ? shop : SHOP_PICKS;
+  return { ...list[Math.floor(Math.random() * list.length)], mine: false };
+}
+function renderSpin() {
+  const p = pickSpin();
+  if (!p) return;
+  spinNow = p;
+  store.set("dc-spin-last", seenKey(p));
+  $("spinSource").textContent = p.mine ? "Spinning for you" : "Tonight's pick from the shop";
+  const name = $("spinName"); name.replaceChildren();
+  const b = document.createElement("b"); b.textContent = p.artist;
+  const i = document.createElement("i"); i.textContent = p.album;
+  name.append(b, document.createElement("br"), i);
+  $("spinMeta").textContent = [p.tier ? TIER_NAMES[p.tier] : "", p.year].filter(Boolean).join(" \u00b7 ");
+  // A spare from your digs: its real link is the reason ("Paul Motian is credited on … and made this record").
+  const link = cleanWhy(p.link).replace(/\.?$/, ".");
+  $("spinWhy").textContent = p.mine ? (p.link ? link : "Found while digging from " + p.from + ".") : p.why;
+  const label = $("spinLabel"); label.style.backgroundImage = ""; label.textContent = p.artist.toUpperCase().slice(0, 28);
+  if (p.rgId) {
+    const img = new Image();
+    img.onload = () => { if (spinNow === p) { label.style.backgroundImage = "url(\"" + img.src + "\")"; label.textContent = ""; } };
+    img.src = "https://coverartarchive.org/release-group/" + p.rgId + "/front-250";
+  }
+  $("spinSec").hidden = false;
+}
+$("spinNext").onclick = () => renderSpin();
+$("spinDig").onclick = () => { if (spinNow) digFromRecords([spinNow]); };
+$("spinListen").onclick = () => { if (spinNow) window.open("https://www.youtube.com/results?search_query=" + q(spinNow) + "+full+album", "_blank", "noopener"); };
 
 // ---------- Sharing a crate as a link ----------
 // The whole crate travels in the link (#crate=…): no account, no server. Up to 10 records and a name.
@@ -1964,6 +2084,8 @@ renderHistory();
 renderProfile();
 renderCrate();
 renderSharedCrate();
+// The turntable fills in after the first paint, so it never holds up the page.
+(window.requestIdleCallback || ((f) => setTimeout(f, 1)))(() => { try { renderSpin(); } catch {} });
 Object.keys(reactions).filter((k) => reactions[k].r === "loved" && !reactions[k].credits).slice(0, 8).forEach(queueCredits);
 
 // Loved records fill crates of 10, oldest first. A new crate starts when one is full.
