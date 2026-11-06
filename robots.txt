@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /c/
+
+Sitemap: https://digdeepcuts.com/sitemap.xml

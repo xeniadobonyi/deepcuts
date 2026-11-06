@@ -23,6 +23,7 @@ module.exports = function handler(req, res) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
 <title>${escapeHtml(title)}</title>
 <meta name="description" content="${escapeHtml(description)}">
 <meta property="og:type" content="website">
@@ -47,6 +48,7 @@ module.exports = function handler(req, res) {
 </html>`;
   res.statusCode = 200;
   res.setHeader("content-type", "text/html; charset=utf-8");
+  res.setHeader("x-robots-tag", "noindex"); // crate pages are for sharing, not for search results
   res.setHeader("cache-control", "public, s-maxage=86400");
   res.end(html);
 };
