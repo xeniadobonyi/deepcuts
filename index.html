@@ -14,6 +14,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://deepcuts-three.vercel.app/api/og?v=6">
 <title>Deep Cuts – discover new music, build your record crates</title>
+<link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2231%22 fill=%22%23111%22/%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2225%22 fill=%22none%22 stroke=%22%232a2a2a%22 stroke-width=%222%22/%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2219%22 fill=%22none%22 stroke=%22%232a2a2a%22 stroke-width=%222%22/%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2213%22 fill=%22%23ff2d95%22/%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%222.5%22 fill=%22%23ececec%22/%3E%3C/svg%3E">
 <style>[hidden]{display:none!important} img{max-width:100%} :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 <style>
 /* Layout: a plain text document, one column, hairline rules between records. Looks unstyled; spacing and type are tuned. */
@@ -278,6 +279,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <div class="spin-info">
         <p class="spin-name" id="spinName"></p>
         <span class="spin-meta" id="spinMeta"></span>
+        <div id="spinRarity"></div>
         <div class="react"><button type="button" class="chip" data-r="loved" id="spinLove" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/></svg><span id="spinLoveText">Loved it</span></button><span class="react-note" id="spinNote" aria-live="polite"></span></div>
       </div>
     </div>
@@ -672,23 +674,7 @@ function render(picks, isExample, fresh, append) {
       linkEl("Apple Music", "https://music.apple.com/search?term=" + q(p)),
       linkEl("Discogs", p.dc?.url || "https://www.discogs.com/search/?type=all&q=" + q(p))
     );
-    let rarity = null;
-    if (dcFresh(p.dc)) {
-      rarity = document.createElement("p"); rarity.className = "rarity";
-      // RARITY ▮▮▮▮▯  Discogs 312 own / 540 want: five bars, fewer owners means more bars
-      const h = p.dc.have, bars = rarityBars(p.dc);
-      const lab = document.createElement("span"); lab.className = "rarity-label"; lab.textContent = (tierOf(p) ? TIER_NAMES[tierOf(p)].toUpperCase() + " \u00b7 " : "") + "RARITY ";
-      const on = document.createElement("span"); on.className = "rarity-on"; on.textContent = "\u25ae".repeat(bars);
-      const off = document.createElement("span"); off.className = "rarity-off"; off.textContent = "\u25af".repeat(5 - bars);
-      const nums = document.createElement("span"); nums.className = "rarity-nums";
-      nums.append(linkEl("Discogs", p.dc.url), " " + count(h) + (p.dc.many ? "+" : "") + " own / " + count(p.dc.want) + " want");
-      [lab, on, off, nums].forEach((x) => x.setAttribute("aria-hidden", "true"));
-      nums.removeAttribute("aria-hidden");
-      const sr = document.createElement("span"); sr.className = "sr-only"; sr.textContent = "Rarity " + bars + " out of 5.";
-      const meter = document.createElement("span"); meter.className = "rarity-meter"; meter.setAttribute("aria-hidden", "true");
-      meter.append(lab, on, off);
-      rarity.append(sr, meter, nums);
-    }
+    const rarity = dcFresh(p.dc) ? rarityLine(p) : null;
     const react = document.createElement("div"); react.className = "react";
     const k = keyOf(p);
     const ICONS = {
@@ -1258,6 +1244,24 @@ let digDepth = 0;
 const rarityBonus = (c) => (!c.dc ? 0 : (c.dc.have < 1500 ? 1 : 0) + (c.dc.want > c.dc.have ? 1 : 0) - (c.dc.have > 4000 ? 1 : 0));
 const rarityBars = (dc) => { if (!dc || !dc.at) return 0; // no counts yet (just a Discogs link)
   const h = dc.have || 0; return dc.many ? 1 : h < 250 ? 5 : h < 1000 ? 4 : h < 3000 ? 3 : h < 8000 ? 2 : 1; };
+// RARITY ▮▮▮▮▯  Discogs 312 own / 540 want: five bars, fewer owners means more bars.
+// Used on every pick and on the record now spinning.
+function rarityLine(p) {
+  const rarity = document.createElement("p"); rarity.className = "rarity";
+  const h = p.dc.have, bars = rarityBars(p.dc);
+  const lab = document.createElement("span"); lab.className = "rarity-label"; lab.textContent = (tierOf(p) ? TIER_NAMES[tierOf(p)].toUpperCase() + " \u00b7 " : "") + "RARITY ";
+  const on = document.createElement("span"); on.className = "rarity-on"; on.textContent = "\u25ae".repeat(bars);
+  const off = document.createElement("span"); off.className = "rarity-off"; off.textContent = "\u25af".repeat(5 - bars);
+  const nums = document.createElement("span"); nums.className = "rarity-nums";
+  nums.append(linkEl("Discogs", p.dc.url), " " + count(h) + (p.dc.many ? "+" : "") + " own / " + count(p.dc.want) + " want");
+  [lab, on, off, nums].forEach((x) => x.setAttribute("aria-hidden", "true"));
+  nums.removeAttribute("aria-hidden");
+  const sr = document.createElement("span"); sr.className = "sr-only"; sr.textContent = "Rarity " + bars + " out of 5.";
+  const meter = document.createElement("span"); meter.className = "rarity-meter"; meter.setAttribute("aria-hidden", "true");
+  meter.append(lab, on, off);
+  rarity.append(sr, meter, nums);
+  return rarity;
+}
 const dcFresh = (dc) => !!dc && Date.now() - (dc.at || 0) < DC_FRESH_MS;
 const count = (n) => Number(n || 0).toLocaleString("en");
 
@@ -2060,15 +2064,78 @@ function renderSpin() {
   const link = cleanWhy(p.link).replace(/\.?$/, ".");
   $("spinWhy").textContent = p.mine ? (p.link ? link : "Found while digging from " + p.from + ".") : p.why;
   const label = $("spinLabel"); label.style.backgroundImage = ""; label.textContent = p.artist.toUpperCase().slice(0, 28);
-  if (p.rgId) {
+  setFavicon(null);
+  spinCover(p).then((src) => {
+    if (!src || spinNow !== p) return;
     const img = new Image();
     img.onload = () => { if (spinNow === p) { label.style.backgroundImage = "url(\"" + img.src + "\")"; label.textContent = ""; } };
-    img.src = "https://coverartarchive.org/release-group/" + p.rgId + "/front-250";
-  }
+    img.src = src;
+    setFavicon(p, src);
+  });
   setSpinLove();
   findSpinSong(p);
+  showSpinRarity(p);
   $("spinNote").textContent = "";
   $("spinSec").hidden = false;
+}
+// The record now spinning gets its Discogs own/want line too. Looked up in the background; the server caches it for hours.
+async function showSpinRarity(p) {
+  const box = $("spinRarity"); box.replaceChildren();
+  const show = () => {
+    if (spinNow !== p || !dcFresh(p.dc)) return;
+    box.replaceChildren(rarityLine(p));
+    $("spinMeta").textContent = p.year || "";
+  };
+  if (dcFresh(p.dc)) return show();
+  if (!API_URL || !discogsOn) return;
+  try {
+    const d = await (await fetch("/api/discogs?artist=" + encodeURIComponent(p.artist) + "&album=" + encodeURIComponent(p.album))).json();
+    if (d.enabled === false) { discogsOn = false; return; }
+    if (!d.found) return;
+    p.dc = { have: d.have || 0, want: d.want || 0, url: d.url || "", many: !!d.many, at: Date.now() };
+    // Keep it with your own finds so the next spin of this record shows it at once.
+    const entry = spinPool.find((x) => seenKey(x) === seenKey(p));
+    if (entry) { entry.dc = p.dc; store.set("dc-spin-pool", spinPool); }
+    show();
+  } catch {}
+}
+// The browser tab icon is the record now spinning: a black disc with this record's cover as its label.
+const FAVICON_DEFAULT = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="31" fill="#111"/><circle cx="32" cy="32" r="25" fill="none" stroke="#2a2a2a" stroke-width="2"/><circle cx="32" cy="32" r="19" fill="none" stroke="#2a2a2a" stroke-width="2"/><circle cx="32" cy="32" r="13" fill="#ff2d95"/><circle cx="32" cy="32" r="2.5" fill="#ececec"/></svg>');
+function setFavicon(p, src) {
+  let link = document.getElementById("favicon");
+  if (!link) { link = document.createElement("link"); link.id = "favicon"; link.rel = "icon"; document.head.appendChild(link); }
+  if (!src) { link.href = FAVICON_DEFAULT; return; }
+  const img = new Image(); img.crossOrigin = "anonymous";
+  img.onload = () => {
+    if (spinNow !== p) return;
+    try {
+      const c = document.createElement("canvas"); c.width = c.height = 64;
+      const x = c.getContext("2d"); if (!x) return;
+      x.fillStyle = "#111"; x.beginPath(); x.arc(32, 32, 31, 0, Math.PI * 2); x.fill();
+      x.strokeStyle = "#2a2a2a"; x.lineWidth = 2;
+      [26, 22].forEach((r) => { x.beginPath(); x.arc(32, 32, r, 0, Math.PI * 2); x.stroke(); });
+      x.save(); x.beginPath(); x.arc(32, 32, 17, 0, Math.PI * 2); x.clip(); x.drawImage(img, 15, 15, 34, 34); x.restore();
+      x.fillStyle = "#ececec"; x.beginPath(); x.arc(32, 32, 2.5, 0, Math.PI * 2); x.fill();
+      link.href = c.toDataURL("image/png");
+    } catch {}
+  };
+  img.src = src;
+}
+// Where the spinning record's cover lives: known for your own finds; looked up once for shop picks (then remembered).
+const spinCovers = store.get("dc-spin-covers", {});
+async function spinCover(p) {
+  if (p.rgId) return "https://coverartarchive.org/release-group/" + p.rgId + "/front-250";
+  if (p.cover) return p.cover;
+  const k = seenKey(p);
+  if (k in spinCovers) return spinCovers[k];
+  if (!API_URL) return "";
+  try {
+    const d = await (await fetch("/api/cover?check=1&artist=" + encodeURIComponent(p.artist) + "&album=" + encodeURIComponent(p.album))).json();
+    if (d.found === null) return "";
+    spinCovers[k] = d.cover || "";
+    store.set("dc-spin-covers", spinCovers);
+    return spinCovers[k];
+  } catch { return ""; }
 }
 // The turntable plays a song: the record's standout track (shop picks) or its opening track (your digs).
 function showSpinTitle(p) {
