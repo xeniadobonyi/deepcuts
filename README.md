@@ -1,4 +1,4 @@
-# Deep Cuts
+# deep cuts
 
 **Discover new music, build your record crates.**
 

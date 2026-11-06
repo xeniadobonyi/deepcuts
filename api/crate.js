@@ -12,9 +12,9 @@ module.exports = function handler(req, res) {
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").replace(/[^A-Za-z0-9.:-]/g, "");
   const origin = host ? "https://" + host : "";
 
-  const title = crate ? crate.name + " · a Deep Cuts crate" : "Deep Cuts – discover new music, build your record crates";
+  const title = crate ? crate.name + " · a deep cuts crate" : "deep cuts – discover new music, build your record crates";
   const list = crate ? crate.recs.slice(0, 4).map((r) => r.artist + " – " + r.album).join(", ") + (crate.recs.length > 4 ? " and " + (crate.recs.length - 4) + " more" : "") : "";
-  const description = crate ? crate.recs.length + " records: " + list + "." : "Deep Cuts – discover new music, build your record crates";
+  const description = crate ? crate.recs.length + " records: " + list + "." : "deep cuts – discover new music, build your record crates";
   const image = origin + "/api/og" + (crate ? "?d=" + d : "?v=6");
   const target = crate ? "/#crate=" + d : "/";
 
@@ -27,7 +27,7 @@ module.exports = function handler(req, res) {
 <title>${escapeHtml(title)}</title>
 <meta name="description" content="${escapeHtml(description)}">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Deep Cuts">
+<meta property="og:site_name" content="deep cuts">
 <meta property="og:title" content="${escapeHtml(title)}">
 <meta property="og:description" content="${escapeHtml(description)}">
 <meta property="og:image" content="${escapeHtml(image)}">
@@ -42,7 +42,7 @@ module.exports = function handler(req, res) {
 <style>body{margin:0;padding:24px;font:16px/1.5 "Helvetica Neue",Helvetica,Arial,sans-serif;background:#ececec;color:#111}a{color:#1a33d6}</style>
 </head>
 <body>
-<p><a href="${escapeHtml(target)}">Open ${escapeHtml(crate ? crate.name : "Deep Cuts")}</a></p>
+<p><a href="${escapeHtml(target)}">Open ${escapeHtml(crate ? crate.name : "deep cuts")}</a></p>
 <script>location.replace(${JSON.stringify(target)});</script>
 </body>
 </html>`;

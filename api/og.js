@@ -19,7 +19,7 @@ module.exports = async function handler(req, res) {
 
   const brand = h("div", { display: "flex", alignItems: "center", gap: 16 }, [
     h("div", { width: 22, height: 22, borderRadius: 11, background: "#ff2d95" }, []),
-    h("div", { fontSize: 30, letterSpacing: 1 }, "DEEP CUTS")
+    h("div", { fontFamily: "Geist", fontWeight: 700, fontSize: 34, letterSpacing: -1 }, "deep cuts")
   ]);
 
   let body;
@@ -66,7 +66,7 @@ module.exports = async function handler(req, res) {
 
   const img = new ImageResponse(
     h("div", { width: "100%", height: "100%", display: "flex", flexDirection: "column", padding: "48px 60px", background: "#ececec", color: "#111111" }, body),
-    { width: 1200, height: 630 }
+    { width: 1200, height: 630, fonts: bold ? [{ name: "Geist", data: regular, weight: 400, style: "normal" }, { name: "Geist", data: bold, weight: 700, style: "normal" }] : undefined }
   );
   const buf = Buffer.from(await img.arrayBuffer());
   res.statusCode = 200;

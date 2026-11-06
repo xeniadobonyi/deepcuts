@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Deep Cuts – discover new music, build your record crates. Give it a record you love and get five you haven&#39;t heard, picked from real producer, sample and label connections on MusicBrainz and Discogs. Free, no sign-up.">
+<meta name="description" content="deep cuts – discover new music, build your record crates. Give it a record you love and get five you haven&#39;t heard, picked from real producer, sample and label connections on MusicBrainz and Discogs. Free, no sign-up.">
 <meta name="theme-color" content="#ececec">
 <script>/* The GitHub Pages copy has no server: send visitors to the live site. */ if (/\.github\.io$/.test(location.hostname)) location.replace("https://digdeepcuts.com/" + location.hash);</script>
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png">
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "Deep Cuts", "url": "https://digdeepcuts.com/", "description": "Free music discovery: give it a record you love and get five records you haven't heard, each with a reason, picked from real producer, sample and label connections on MusicBrainz and Discogs. Build and share record crates.", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}, "isAccessibleForFree": true, "author": {"@type": "Person", "name": "Xenia Dobonyi"}}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "deep cuts", "url": "https://digdeepcuts.com/", "description": "Free music discovery: give it a record you love and get five records you haven't heard, each with a reason, picked from real producer, sample and label connections on MusicBrainz and Discogs. Build and share record crates.", "applicationCategory": "MultimediaApplication", "operatingSystem": "Any", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}, "isAccessibleForFree": true, "author": {"@type": "Person", "name": "Xenia Dobonyi"}}</script>
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Deep Cuts">
-<meta property="og:title" content="Deep Cuts – discover new music, build your record crates">
+<meta property="og:site_name" content="deep cuts">
+<meta property="og:title" content="deep cuts – discover new music, build your record crates">
 <meta property="og:description" content="Discover new music, build your record crates.">
 <meta property="og:image" content="https://digdeepcuts.com/api/og?v=6">
 <meta property="og:image:width" content="1200">
@@ -22,7 +22,7 @@
 <link rel="canonical" href="https://digdeepcuts.com/">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://digdeepcuts.com/api/og?v=6">
-<title>Deep Cuts – discover new music, build your record crates</title>
+<title>deep cuts – discover new music, build your record crates</title>
 <link rel="icon" id="favicon" type="image/svg+xml" href="/favicon.svg">
 <style>[hidden]{display:none!important} img{max-width:100%} :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
 <style>
@@ -55,7 +55,7 @@ body {
 .wrap > * + * { border-top: 1px solid var(--fg); padding-top: 22px; }
 .sec-title { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
 header { display: flex; flex-direction: column; gap: 2px; }
-.brand { font-size: 18px; font-weight: 700; margin: 0; white-space: nowrap; }
+.brand { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; margin: 0; white-space: nowrap; }
 .tagline { margin: 0; max-width: 52ch; }
 .label { font-size: 15px; color: var(--muted); }
 header .label { order: 3; }
@@ -214,6 +214,8 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .shared .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; max-width: 520px; }
 .shared .actions .btn { min-height: 48px; padding: 8px 12px; font-size: 16px; font-weight: 700; }
 .how { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 62ch; }
+.faq-all { margin-top: 18px; max-width: 62ch; }
+.faq-all > summary { cursor: pointer; font-weight: 700; padding-block: 10px; border-top: 1px solid var(--rule); }
 .faq { border-top: 1px solid var(--rule); padding-block: 10px; max-width: 62ch; }
 .faq summary { cursor: pointer; font-weight: 500; }
 .faq p { margin: 8px 0 0; color: var(--muted); }
@@ -266,7 +268,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 
 <div class="wrap">
   <header>
-    <h1 class="brand">Deep Cuts</h1>
+    <h1 class="brand">deep cuts</h1>
     <p class="tagline">Discover new music, build your record crates.</p>
   </header>
 
@@ -375,13 +377,15 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <li><b>An AI chooses and explains.</b> It picks the best five from those real records and writes why. It can't make records up: every pick is a real release.</li>
       <li><b>Rarity comes from collectors.</b> Discogs shows how many people own and want each record, so every dig mixes an Essential, Digger favourites and Deep cuts. Dig deeper goes rarer.</li>
     </ol>
-    <details class="faq"><summary>Why can a dig take half a minute?</summary><p>MusicBrainz, the open music database Deep Cuts reads, allows about one lookup a second. Records someone dug from recently come back much faster.</p></details>
-    <details class="faq"><summary>Is my data stored?</summary><p>No accounts, no ads and no cookies. Visits are counted anonymously (Vercel Web Analytics) so I can see how the site is used. Your digs, crates and taste profile stay in this browser. What you search is sent to the AI to make the dig; Deep Cuts doesn&rsquo;t save it.</p></details>
-    <details class="faq"><summary>Which AI is it?</summary><p>An open model (gpt-oss) on Groq&rsquo;s free tier. It only chooses among real records the site found, and writes the reasons.</p></details>
-    <details class="faq"><summary>Is it free?</summary><p>Yes: free, with no ads and no sign-up.</p></details>
+    <details class="faq-all"><summary>Questions</summary>
+      <details class="faq"><summary>Why can a dig take half a minute?</summary><p>MusicBrainz, the open music database deep cuts reads, allows about one lookup a second. Records someone dug from recently come back much faster.</p></details>
+      <details class="faq"><summary>Is my data stored?</summary><p>No accounts, no ads and no cookies. Visits are counted anonymously (Vercel Web Analytics) so I can see how the site is used. Your digs, crates and taste profile stay in this browser. What you search is sent to the AI to make the dig; deep cuts doesn&rsquo;t save it.</p></details>
+      <details class="faq"><summary>Which AI is it?</summary><p>An open model (gpt-oss) on Groq&rsquo;s free tier. It only chooses among real records the site found, and writes the reasons.</p></details>
+      <details class="faq"><summary>Is it free?</summary><p>Yes: free, with no ads and no sign-up.</p></details>
+    </details>
   </section>
 
-  <p class="foot"><strong style="color:var(--fg)">Why Deep Cuts.</strong> I think taste can be acquired: you listen, you discover records, and slowly a taste forms. I built this to help me start somewhere on days I don't know what to play, and to dig deeper into artists I love. It's open source and built with AI as a coding partner.</p>
+  <p class="foot"><strong style="color:var(--fg)">Why deep cuts.</strong> I think taste can be acquired: you listen, you discover records, and slowly a taste forms. I built this to help me start somewhere on days I don't know what to play, and to dig deeper into artists I love. It's open source and built with AI as a coding partner.</p>
   <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice. <strong style="color:var(--fg)">Now spinning.</strong> Each visit plays a song from a great album: a hand-picked record from the shop's crate, or one your own digs found but didn't show you, so it slowly follows your taste. The reasons are written by AI, so check credits on Discogs before quoting them. Open source on <a href="https://github.com/xeniadobonyi/deepcuts" target="_blank" rel="noopener">GitHub</a>. Album data from MusicBrainz. Covers from the Cover Art Archive. <a href="https://www.discogs.com" target="_blank" rel="noopener">Data provided by Discogs.</a> This site uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. “Discogs” is a trademark of Zink Media, LLC.</p>
   <p class="foot">Found a bug, or have an idea? Write to <a href="mailto:xenerr@gmail.com?subject=Deep%20Cuts%20feedback">xenerr@gmail.com</a>.</p>
   <p class="foot community">Every record here was found through credits and collections shared by music lovers on <a href="https://musicbrainz.org" target="_blank" rel="noopener">MusicBrainz</a> and <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>.</p>
@@ -2361,7 +2365,7 @@ function sharePanel(n, recs, onRename) {
   row.append(copy);
   if (navigator.share) {
     const sh = document.createElement("button"); sh.type = "button"; sh.className = "btn ghost"; sh.textContent = "Share\u2026";
-    sh.onclick = async () => { try { await navigator.share({ title: crateName(n) + " \u00b7 Deep Cuts", text: "A crate of " + recs.length + " records I dug up", url: link() }); } catch {} };
+    sh.onclick = async () => { try { await navigator.share({ title: crateName(n) + " \u00b7 deep cuts", text: "A crate of " + recs.length + " records I dug up", url: link() }); } catch {} };
     row.append(sh);
   }
   panel.append(lab, input, row, note);
