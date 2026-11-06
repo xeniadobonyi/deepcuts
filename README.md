@@ -54,6 +54,10 @@ Optional environment variables:
 
 Groq's free allowance is shared by all visitors, so on a very busy day the shop may close for digging until the next day.
 
+## License
+
+The code is released under the [MIT License](LICENSE). The Geist fonts in `api/_fonts` are under the SIL Open Font License (see `api/_fonts/Geist-LICENSE.txt`). Record data belongs to MusicBrainz and Discogs and follows their terms.
+
 ## Feedback
 
 Found a bug or have an idea? Open an issue, or write to [xenerr@gmail.com](mailto:xenerr@gmail.com?subject=Deep%20Cuts%20feedback).
