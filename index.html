@@ -2072,7 +2072,9 @@ function renderSpin() {
   spinNow = p;
   store.set("dc-spin-last", seenKey(p));
   notePlayed(p);
-  $("spinSource").textContent = p.mine ? "Spinning for you" : "Tonight's pick from the shop";
+  // The visitor's own clock: from 18:00 until 5:00 it's tonight's pick, the rest of the day today's.
+  const hr = new Date().getHours();
+  $("spinSource").textContent = p.mine ? "Spinning for you" : (hr >= 18 || hr < 5 ? "Tonight's" : "Today's") + " pick from the shop";
   showSpinTitle(p);
   $("spinMeta").textContent = [p.tier ? TIER_NAMES[p.tier] : "", p.year].filter(Boolean).join(" \u00b7 ");
   // A spare from your digs: its real link is the reason ("Paul Motian is credited on … and made this record").
@@ -2495,6 +2497,8 @@ function tally(list, fn) {
 }
 
 
+// Which records the analysis was written from: it is rewritten only when this changes.
+const lovedSig = () => Object.entries(reactions).filter(([, v]) => v.r === "loved").map(([k]) => k).sort().join("|");
 async function writeSummary(manual) {
   if (summarizing) return;
   if (!aiReady()) { if (manual) { profileNote = "Taste analysis isn't switched on for this address yet."; renderProfile(); } return; }
@@ -2503,6 +2507,7 @@ async function writeSummary(manual) {
   if (rs.length < 3) return;
   const by = (t) => rs.filter(([, v]) => v.r === t).map(([k, v]) => ({ ...v, ...(idx[k] || {}) }));
   const fmt = (l) => l.map((p) => p.artist + " \u2013 " + p.album + (p.year ? " (" + p.year + (p.label ? ", " + p.label : "") + ")" : "")).join("; ") || "none";
+  const sig = lovedSig();
   summarizing = true; profileNote = ""; renderProfile();
   try {
     let res = await askClaude([
@@ -2529,7 +2534,7 @@ async function writeSummary(manual) {
     store.set("dc-portrait", {
       v: 2, loves, avoids, genres: (Array.isArray(res.genres) ? res.genres : Array.isArray(res.tags) ? res.tags : []).map(String).slice(0, 5),
       portrait: loves + (avoids ? " Not for them: " + avoids : ""),
-      basis: rs.length
+      basis: rs.length, sig
     });
   } catch (err) {
     profileNote = err?.code === "cancelled" ? "" : (ERR[err?.code] || "Couldn't analyse your taste. Try again.");
@@ -2538,11 +2543,12 @@ async function writeSummary(manual) {
   }
 }
 
-// Refresh the analysis on its own once there are 3 reactions, then after every 3 new ones.
+// The analysis updates on its own whenever the loved records change (3 or more), never on demand:
+// the same records would only give the same analysis, and every AI request counts against the free allowance.
 function maybeAutoSummary() {
   const n = Object.keys(reactions).length, saved = store.get("dc-portrait", null);
   if (n < 3 || summarizing || !aiReady()) return;
-  if (saved && saved.v === 2 && Math.abs(n - (saved.basis || 0)) < 3) return;
+  if (saved && saved.v === 2 && saved.sig === lovedSig()) return;
   clearTimeout(summaryTimer);
   summaryTimer = setTimeout(() => writeSummary(false), 4000);
 }
@@ -2624,15 +2630,12 @@ function renderProfile() {
     box.append(dl);
   }
 
-  const act = document.createElement("div"); act.className = "actions";
-  const btn = document.createElement("button"); btn.type = "button"; btn.className = "btn ghost"; btn.id = "portraitBtn";
-  btn.textContent = saved?.loves || saved?.portrait ? "Refresh my taste analysis" : "Analyse my taste";
-  const note = document.createElement("span"); note.className = "status";
-  if (rs.length < 3) { btn.disabled = true; note.textContent = "React to at least 3 records and a short analysis of your taste appears here."; }
-  else if (summarizing) { btn.disabled = true; note.textContent = "Analysing your taste\u2026"; }
+  // No button: the analysis rewrites itself when you love a new record.
+  const note = document.createElement("p"); note.className = "status";
+  if (rs.length < 3) note.textContent = "Love at least 3 records and a short analysis of your taste appears here.";
+  else if (summarizing) note.textContent = "Updating your taste analysis\u2026";
   else if (profileNote) note.textContent = profileNote;
-  btn.onclick = () => writeSummary(true);
-  act.append(btn, note); box.append(act);
+  if (note.textContent) box.append(note);
 }
 
 (async () => {
