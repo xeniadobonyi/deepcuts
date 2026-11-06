@@ -885,6 +885,28 @@ function splitSeed(s) {
   return parts.length >= 2 ? { artist: parts[0], album: parts.slice(1).join(" - ") } : { artist: String(s).trim(), album: "" };
 }
 
+// Which album a sampled track really comes from. A plain album release whose own title is its album's title wins,
+// earliest first. Reissues that join two albums ("Shapes of Rhythm / Woman Is Sweeter") are filed under one of them,
+// so for those each joined title is checked: the album only counts if its own track list has the sampled track.
+// When that can't be confirmed the sample link is dropped: a wrong album here would be a wrong fact in the reason.
+async function sampleHome(src, sampledTitle) {
+  const plain = (src?.releases || []).filter((r) => r["release-group"]?.id && ["Album", "EP"].includes(r["release-group"]["primary-type"]) && !(r["release-group"]["secondary-types"] || []).length);
+  const byDate = (x, y) => String(x.date || "9999").localeCompare(String(y.date || "9999"));
+  const own = plain.filter((r) => normTitle(r.title) === normTitle(r["release-group"].title)).sort(byDate);
+  if (own.length) return own[0];
+  const joined = plain.filter((r) => /\s(\/|\+|&)\s/.test(r.title || "")).sort(byDate)[0];
+  const artistId = src?.["artist-credit"]?.[0]?.artist?.id;
+  if (!joined || !artistId) return null;
+  const parts = joined.title.split(/\s(?:\/|\+|&)\s/).map((t) => normTitle(t)).filter(Boolean);
+  const rgs = (await mb("release-group", { artist: artistId, type: "album", limit: 100 }))?.["release-groups"] || [];
+  const want = normTitle(sampledTitle);
+  for (const rg of rgs.filter((g) => parts.includes(normTitle(g.title)) && !(g["secondary-types"] || []).length)) {
+    const rel = (await mb("release", { "release-group": rg.id, inc: "recordings", limit: 5 }))?.releases || [];
+    const tracks = rel.flatMap((r) => (r.media || []).flatMap((m) => (m.tracks || []).map((t) => normTitle(t.title))));
+    if (tracks.includes(want)) return { date: rg["first-release-date"] || "", "release-group": rg };
+  }
+  return null;
+}
 async function gatherCandidates(seedList, onStep) {
   const seeds = [], cands = new Map();
   // About one MusicBrainz lookup per second: cap the optional links so a dig stays around half a minute.
@@ -1046,9 +1068,7 @@ async function gatherCandidates(seedList, onStep) {
           onStep("Tracing a sample: \u201c" + sm.title + "\u201d\u2026");
           const src = await mbc("recording/" + sm.id, { inc: "artist-credits+releases+release-groups" });
           const who = creditName(src?.["artist-credit"]);
-          const home = (src?.releases || [])
-            .filter((r) => r["release-group"]?.id && ["Album", "EP"].includes(r["release-group"]["primary-type"]) && !(r["release-group"]["secondary-types"] || []).length)
-            .sort((x, y) => String(x.date || "9999").localeCompare(String(y.date || "9999")))[0];
+          const home = await sampleHome(src, sm.title);
           if (!who || !home) continue;
           add({ artist: who, album: home["release-group"].title, year: yearOf(home.date), label: "", rgId: home["release-group"].id },
             `Sample source: \u201c${sm.by}\u201d by ${seed.artist} samples \u201c${src.title || sm.title}\u201d from this album`, true);
