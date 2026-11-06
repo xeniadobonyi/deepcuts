@@ -1,46 +1,63 @@
 # Deep Cuts
 
-Deep Cuts learns your taste and digs for you: five records you probably haven't heard, each with the reason it was picked.
+**Discover new music, build your record crates.**
 
-## What's here
+Live at **[digdeepcuts.com](https://digdeepcuts.com)**. Free, no sign-up, no ads.
 
-- `index.html`: the whole site, one static page
-- `api/cover.js`: checks each recommended album exists on MusicBrainz and finds its cover in the Cover Art Archive
-- `api/mb.js`: read-only MusicBrainz lookups (cached), used to find candidates through real links: the same label in the same years, the producers and engineers on a record, and related artists. The AI then chooses among those candidates and explains the picks.
-- `api/discogs.js`: asks Discogs how many members own and want each candidate album. Records almost everyone owns are left out and rare, sought-after ones come first. Optional: it runs only when `DISCOGS_TOKEN` is set.
-- Discogs is also the backup when MusicBrainz doesn't know a record yet (new and underground releases): suggestions, and digs from the record's label and credited people.
-- Vibe digs search Discogs by genre, style, country and years (worked out by the AI from the words), so the AI chooses among real records instead of recalling them.
-- `api/dig.js`: a small Vercel Function that sends each dig to Groq's free AI API and streams the answer back. The key stays on the server; visitors never see it or need an account.
+I think taste can be acquired. You're not born with a taste in music: you listen, you discover records, and slowly you acquire a certain taste. Deep Cuts helps you find the next record to listen to, using what people have documented online about records: producers, session players, samples and labels.
 
-Everything runs on free tiers: Vercel Hobby for hosting and Groq's free API for the AI. Groq's free allowance is shared by all visitors, so on a very busy day digs may pause until the next day.
+## How it works
 
-## What works
+- **Dig from records you love.** Give it up to three albums, songs or artists and it digs up five records you probably haven't heard, each with a short reason.
+- **Or describe a vibe.** For example "brazilian samba-jazz", "ibiza house" or "california 70s".
+- **Real records only.** Every candidate comes from real connections documented on [MusicBrainz](https://musicbrainz.org) and [Discogs](https://www.discogs.com): the same producer, engineer or session players, samples, band members, labels. The AI never invents a record. It only chooses from that pool and explains why.
+- **A mix of classics and deep cuts.** Discogs collector counts sort each candidate into Essential (3,000+ owners), Digger favourite (1,000–3,000) or Deep cut (under 1,000). Each dig mixes them, and "Dig deeper" goes rarer each time.
+- **Now spinning.** Every visit opens with a song from a great album: a hand-picked record from the shop's crate, or one your own digs found but didn't show you. Listen on YouTube, Spotify or Apple Music, love it, or dig from it.
 
-- Start a dig from up to three albums, songs or artists you love, or from a vibe (keywords, a mood or a moment)
-- Five picks, each with the connection to your taste and links to YouTube, Spotify, Apple Music and Discogs
-- Suggestions and spelling corrections from MusicBrainz while typing records
-- Reactions (Loved it, Not for me), crates, past digs and a taste profile, saved in the visitor's browser
+## What you can do
 
-## Going live on Vercel (free Hobby plan)
+- Love records, and build crates of up to 10 records you're proud of
+- Share a crate as a link, with a preview card listing its records
+- See your taste profile: the genres, decades and producers you keep coming back to, with a short written analysis
+- Move up seven levels from *Just Browsing* to *Ultimate Digger* as you love more records
+- See each record's rarity: `RARITY ▮▮▮▯▯  Discogs 2,140 own / 3,310 want`
 
-1. Create a free account at console.groq.com (no card needed) and create an API key.
-2. Sign in at vercel.com with GitHub.
-3. Add New → Project → import `xeniadobonyi/deepcuts`. Leave the settings as they are and deploy.
-4. In the project, open Settings → Environment Variables and add `GROQ_API_KEY` with your key. Then redeploy (Deployments → ⋯ → Redeploy).
-5. Open the `.vercel.app` address Vercel gives you. Digs now work for everyone.
+Everything you do is saved in your own browser. There are no accounts. Visits are counted anonymously with Vercel Web Analytics (no cookies).
+
+## How it's built
+
+One static page plus a few small server functions, all on free tiers.
+
+| Part | What it does |
+| --- | --- |
+| `index.html` | the whole site |
+| `api/dig.js` | sends each dig to an open model (gpt-oss) on [Groq](https://groq.com) and streams the answer back; the key stays on the server |
+| `api/mb.js` | cached, rate-limited MusicBrainz lookups: credits, relationships, labels, samples |
+| `api/discogs.js` | Discogs collector counts, credits, and the backup for records MusicBrainz doesn't know; also powers vibe digs by style, country and years |
+| `api/cover.js` | checks each album exists and finds its cover on the [Cover Art Archive](https://coverartarchive.org) |
+| `api/crate.js`, `api/og.js` | shared crate links and their preview images |
+
+I built it with AI as a coding partner: I made the product and design decisions, and Claude helped write and test the code.
+
+## Run your own
+
+1. Create a free API key at [console.groq.com](https://console.groq.com).
+2. Import this repo as a new project on [Vercel](https://vercel.com) (the free Hobby plan is enough) and deploy.
+3. In Settings → Environment Variables, add `GROQ_API_KEY`. Then redeploy.
+4. To use your own domain, add it in Vercel and to `SERVER_HOSTS` and `SITE_URL` near the top of the script in `index.html`.
 
 Optional environment variables:
 
-- `MODEL`: the Groq model to use (default `openai/gpt-oss-120b`)
-- `REQUESTS_PER_DAY`: optional limit on requests per visitor per day (off unless set)
-- `DISCOGS_TOKEN`: a free personal access token from discogs.com → Settings → Developers. Turns on the rarity filter, the rarity meter and producer credits for the taste profile (MusicBrainz is the backup for credits). Discogs' API terms apply: the site credits Discogs next to the counts, says it isn't affiliated with Discogs, and never shows counts more than 6 hours old.
+- `DISCOGS_TOKEN`: a free personal access token from discogs.com → Settings → Developers. Turns on rarity, collector counts and Discogs credits. Discogs' API terms apply.
+- `MODEL`: the Groq model to use (default `openai/gpt-oss-120b`; a smaller model is tried when it's busy).
+- `REQUESTS_PER_DAY`: AI requests allowed per visitor per day (default 150, `0` turns it off).
 
-The GitHub Pages copy (xeniadobonyi.github.io/deepcuts) has no server, so it shows the sample dig only. Share the Vercel address instead.
+Groq's free allowance is shared by all visitors, so on a very busy day the shop may close for digging until the next day.
 
-To use a custom domain, add it in Vercel and add it to `SERVER_HOSTS` near the top of the script in `index.html`.
+## Feedback
 
-## Still to build
+Found a bug or have an idea? Open an issue, or write to [xenerr@gmail.com](mailto:xenerr@gmail.com?subject=Deep%20Cuts%20feedback).
 
-- Official album artwork (Spotify or Apple Music APIs)
-- Email sign-in, so history follows people across devices
-- Privacy policy and terms (GDPR)
+---
+
+Every record here was found through credits and collections shared by music lovers on MusicBrainz and Discogs. Deep Cuts isn't affiliated with either.
