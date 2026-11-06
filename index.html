@@ -2580,7 +2580,7 @@ function renderProfile() {
   box.append(level);
 
   const stats = document.createElement("div"); stats.className = "stats";
-  [[shownKeys.size, "records shown"], [loved.length, "loved"], [nope.length, "not for me"], [repeats, "repeats"]]
+  [[shownKeys.size, "records shown"], [loved.length, "loved"], [repeats, "repeats"]]
     .forEach(([n, t]) => { const s = document.createElement("span"); const b = document.createElement("b"); b.textContent = n; s.append(b, " " + t); stats.append(s); });
   box.append(stats);
 
