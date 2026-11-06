@@ -1438,11 +1438,11 @@ function lovedPeople(loved) {
 // Rarity is the average Discogs rarity bars of loved records; when Discogs data is missing it isn't required.
 const LEVELS = [
   { name: "Just Browsing" },
-  { name: "Flicking Through the Bins", loved: 5 },
-  { name: "Back-of-the-Shop Browser", loved: 12, rarity: 2 },
-  { name: "Mixtape Maker", loved: 20, rarity: 2 },
-  { name: "Sleeve Reader", loved: 25, rarity: 3, credits: true },
-  { name: "Ultimate Digger", loved: 40, rarity: 4, credits: true }
+  { name: "Flicking Through the Bins", loved: 100 },
+  { name: "Back-of-the-Shop Browser", loved: 300, rarity: 2 },
+  { name: "Mixtape Maker", loved: 500, rarity: 2 },
+  { name: "Sleeve Reader", loved: 700, rarity: 3, credits: true },
+  { name: "Ultimate Digger", loved: 1000, rarity: 4, credits: true }
 ];
 function diggerStats() {
   const idx = pickIndex();
