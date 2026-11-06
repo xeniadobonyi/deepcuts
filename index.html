@@ -192,6 +192,8 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .share-panel { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 420px; border: 1px solid var(--rule); background: var(--surface); padding: 12px; box-sizing: border-box; }
 .share-panel label { font-size: 13px; color: var(--muted); }
 .share-note { font-size: 13px; color: var(--muted); min-height: 1.2em; }
+/* Copy link and Share… side by side at the same size. */
+.share-panel .actions .btn { flex: 1 1 0; min-height: 44px; padding: 8px 14px; font-size: 15px; font-weight: 700; }
 .shared { display: flex; flex-direction: column; gap: 14px; }
 .shared-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .shared-close { min-height: 36px; padding: 4px 12px; font-size: 14px; }
