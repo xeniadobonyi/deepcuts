@@ -167,6 +167,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .pick.is-unverified .sleeve { opacity: .45; }
 .crates { display: flex; flex-direction: column; gap: 28px; }
 .crate-box { display: flex; flex-direction: column; gap: 10px; }
+.crate-tag { color: var(--pink); font-weight: 700; }
 .community { margin: 0; font-size: 14px; color: var(--muted); max-width: 62ch; }
 .community a { color: inherit; }
 .spin { display: flex; flex-direction: column; gap: 12px; background: var(--surface); border: 1px solid var(--fg); padding: 16px; }
@@ -2390,11 +2391,14 @@ function renderCrate() {
   const line = (t) => "| " + fit(t) + " |";
   crates.map((recs, n) => ({ recs, n })).reverse().forEach(({ recs, n }) => {
     const crate = document.createElement("div"); crate.className = "ascii-crate";
-    const topLine = () => { const label = " " + ascii(crateName(n)).toUpperCase().slice(0, 20) + " ", count = recs.length === CRATE_SIZE ? " FULL " : " " + recs.length + "/10 ";
-      return "+--" + label + "-".repeat(Math.max(1, W - 6 - label.length - count.length)) + count + "--+"; };
-    const label = " " + ascii(crateName(n)).toUpperCase().slice(0, 20) + " ", count = recs.length === CRATE_SIZE ? " FULL " : " " + recs.length + "/10 ";
+    // Top edge of the crate: the crate's name and its count (7/10 or FULL) in pink, the frame in the usual ink.
     const top = document.createElement("span"); top.className = "ascii-line";
-    top.textContent = "+--" + label + "-".repeat(Math.max(1, W - 6 - label.length - count.length)) + count + "--+";
+    const drawTop = () => {
+      const label = " " + ascii(crateName(n)).toUpperCase().slice(0, 20) + " ", count = recs.length === CRATE_SIZE ? " FULL " : " " + recs.length + "/10 ";
+      const pink = (t) => Object.assign(document.createElement("span"), { className: "crate-tag", textContent: t });
+      top.replaceChildren("+--", pink(label), "-".repeat(Math.max(1, W - 6 - label.length - count.length)), pink(count), "--+");
+    };
+    drawTop();
     crate.append(top);
     const panel = document.createElement("div"); panel.className = "crate-detail"; panel.hidden = true;
     for (let i = 0; i < CRATE_SIZE; i++) {
@@ -2417,7 +2421,7 @@ function renderCrate() {
     bottom.textContent = "+" + "-".repeat(W - 2) + "+";
     crate.append(bottom);
     const wrap = document.createElement("div"); wrap.className = "crate-box";
-    wrap.append(crate, panel, sharePanel(n, recs, () => { top.textContent = topLine(); }));
+    wrap.append(crate, panel, sharePanel(n, recs, drawTop));
     box.append(wrap);
   });
 }
