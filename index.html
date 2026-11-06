@@ -467,7 +467,7 @@ let openCrateRecord = null;
 
 // Where live digs come from: Claude inside claude.ai, or the Deep Cuts server at /api/dig when the site runs on Vercel.
 // A browser-saved API key is an owner-only test path, shown only at #connect.
-const SERVER_HOSTS = [".vercel.app"]; // add a custom domain here, e.g. "deepcuts.fm"
+const SERVER_HOSTS = [".vercel.app", "digdeepcuts.com"]; // also matches www.digdeepcuts.com
 const API_URL = SERVER_HOSTS.some((h) => location.hostname === h.replace(/^\./, "") || location.hostname.endsWith(h)) ? "/api/dig" : "";
 const OWNER_TEST = location.hash === "#connect";
 const MODEL = "claude-sonnet-5-5";
