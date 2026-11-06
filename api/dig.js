@@ -65,7 +65,7 @@ module.exports = async function handler(req, res) {
           model,
           // gpt-oss models think before answering; keep that short and out of the reply so the answer has room.
           ...(model.startsWith("openai/gpt-oss") ? { reasoning_effort: "low", include_reasoning: false } : {}),
-          max_completion_tokens: 8000,
+          max_completion_tokens: 3000, // 8 short picks fit easily; a smaller cap keeps more of the per-minute allowance free
           temperature: 0.7,
           stream: true,
           messages: [

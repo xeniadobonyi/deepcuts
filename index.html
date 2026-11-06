@@ -1146,6 +1146,11 @@ function rankCandidates(candidates, seeds, seedList) {
   return out.slice(0, 45);
 }
 
+// Keeps each AI request small (Groq's free tier counts every word): the first 30 candidates, since the pool is
+// already laid out strongest first with every kind in each stretch; at most two facts each, trimmed; the kind as one word.
+const PROMPT_POOL = 30;
+const shortFact = (f) => (f.length > 140 ? f.slice(0, 137).trimEnd() + "\u2026" : f);
+const candLine = (c, i, extra = "") => (i + 1) + ". " + c.artist + " \u2013 " + c.album + (c.year ? " (" + c.year + ")" : "") + extra + ": " + c.facts.slice(0, 2).map(shortFact).join("; ") + (tierOf(c) ? " [" + TIER_NAMES[tierOf(c)] + "]" : "");
 function buildDataPrompt(seeds, mood, pool) {
   const many = seeds.length > 1;
   return [
@@ -1155,7 +1160,7 @@ function buildDataPrompt(seeds, mood, pool) {
     mood ? "They also searched for: \"" + mood + "\". Every pick must clearly match it." : "",
     many ? "First work out what these records have in common: country, language, scene, era, genre or label. Favour candidates that share it." : "",
     "Candidate albums, each with the real connection found in MusicBrainz:",
-    ...pool.map((c, i) => (i + 1) + ". " + c.artist + " \u2013 " + c.album + (c.year ? " (" + c.year + ")" : "") + (many ? " [linked to record " + (c.from || [0]).map((x) => x + 1).join(" and ") + "]" : "") + ": " + c.facts.join("; ") + (tierOf(c) ? " [" + TIER_NAMES[tierOf(c)] + ": " + c.dc.have + " own it, " + c.dc.want + " want it on Discogs]" : "")),
+    ...pool.slice(0, PROMPT_POOL).map((c, i) => candLine(c, i, many ? " [linked to record " + (c.from || [0]).map((x) => x + 1).join(" and ") + "]" : "")),
     "Rules:",
     "- Choose 8 candidates, by number, from this list only, ranked best first. 8 different artists.",
     pool.some((c) => tierOf(c)) ? "- The listener gets a mix of kinds: " + Object.entries(mixNow()).filter(([, n]) => n).map(([t, n]) => n + " " + TIER_NAMES[t]).join(", ") + ". Among your 8, include at least that many of each kind where the list has them. Within each kind, choose the most accomplished records: the ones critics and collectors rate highest. Never choose a weak record just because it is rare or famous." : "",
@@ -1164,7 +1169,7 @@ function buildDataPrompt(seeds, mood, pool) {
     digDepth > 0 ? "- This is a deeper dig: favour the most obscure candidates, the ones fewest people own." : "",
     "- Prefer the most rewarding discoveries and proper studio albums over reissues.",
     "- Vary the connections: no more than 2 picks through the same link (the same label, or the same person). Musicians, producers, samples and band members make stronger links than a shared label.",
-    pool.some((c) => tierOf(c)) ? "- Do not mention the Discogs counts or the kind in your text." : "- Favour lesser-known albums over famous ones.",
+    pool.some((c) => tierOf(c)) ? "- Do not mention the kind in your text." : "- Favour lesser-known albums over famous ones.",
     "- The connection you describe must come from the facts listed for that candidate. Do not add credits, samples, labels or places that are not listed. You may describe how the record sounds.",
     many
       ? "- Order from strongest match to weakest. The first pick is the candidate that best sits in the common ground of all the records; its \"why\" mentions what links it to all of the records, and its \"thread\" is \"Common ground\"."
@@ -1306,14 +1311,14 @@ function buildVibeDataPrompt(mood, pool, place = "") {
     "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
     "The listener searched for: \"" + mood + "\". This search is the brief: every pick must clearly match all of its words.",
     "Candidate albums, real records found on Discogs:",
-    ...pool.map((c, i) => (i + 1) + ". " + c.artist + " \u2013 " + c.album + (c.year ? " (" + c.year + ")" : "") + ": " + c.facts.join("; ") + (tierOf(c) ? " [" + TIER_NAMES[tierOf(c)] + ": " + c.dc.have + " own it, " + c.dc.want + " want it on Discogs]" : "")),
+    ...pool.slice(0, PROMPT_POOL).map((c, i) => candLine(c, i)),
     "Rules:",
     "- Choose 8 candidates, by number, from this list only, ranked best first. 8 different artists.",
     "- The listener gets a mix of kinds: " + Object.entries(mixNow()).filter(([, n]) => n).map(([t, n]) => n + " " + TIER_NAMES[t]).join(", ") + ". Among your 8, include at least that many of each kind where the list has them. Within each kind, choose the most accomplished records: the ones critics and collectors rate highest.",
     digDepth > 0 ? "- This is a deeper dig: favour the most obscure candidates that still fit perfectly." : "",
     "- Only choose records you are confident truly match the search. Skip candidates that only match it loosely.",
     place ? "- The search names a place: " + place + ". Discogs only lists countries, so only choose artists you know were based in or made this record in " + place + ". Records from its labels count." : "",
-    "- Do not mention the Discogs counts or the kind in your text. Only state facts you are sure of; you may describe how a record sounds.",
+    "- Do not mention the kind in your text. Only state facts you are sure of; you may describe how a record sounds.",
     WHY_STYLE + "\n  Say how it fits the search (\"" + mood + "\") along the way.",
     "- \"thread\": 2 to 4 words naming how it matches the search, e.g. \"Laurel Canyon, 1972\", \"West Coast soft rock\".",
     'Reply with only a JSON array: [{"id": number, "thread": string, "why": string}]'
