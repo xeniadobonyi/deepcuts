@@ -3,8 +3,9 @@
 // The answer is re-sent in the same event format the page already reads, so the page needs no changes.
 
 const MAX_PROMPT_CHARS = 12000;
-// Optional per-visitor daily limit: set REQUESTS_PER_DAY in Vercel to turn it on. Off by default.
-const REQUESTS_PER_DAY = Number(process.env.REQUESTS_PER_DAY || 0);
+// Per-visitor daily limit on AI requests. A dig makes one or two, so 150 covers the page's 50 digs a day.
+// Set REQUESTS_PER_DAY in Vercel to change it (0 turns it off).
+const REQUESTS_PER_DAY = Number(process.env.REQUESTS_PER_DAY ?? 150);
 const hits = new Map(); // best-effort per-visitor limit; resets when the function restarts
 
 function dayKey() { return new Date().toISOString().slice(0, 10); }
@@ -43,7 +44,7 @@ module.exports = async function handler(req, res) {
   if (!process.env.GROQ_API_KEY) return sendJSON(res, 500, { error: { message: "The server has no Groq key yet. Add GROQ_API_KEY in Vercel, then redeploy." } });
 
   const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "unknown";
-  if (overLimit(ip)) return sendJSON(res, 429, { error: { message: "You've reached today's dig limit. Come back tomorrow." } });
+  if (overLimit(ip)) return sendJSON(res, 429, { error: { code: "visitor_limit", message: "You have 50 digs a day, and you've dug a lot today. Come back tomorrow." } });
 
   let prompt;
   try { ({ prompt } = await readBody(req)); } catch { return sendJSON(res, 400, { error: { message: "Send JSON: {\"prompt\": \"...\"}" } }); }
@@ -54,7 +55,7 @@ module.exports = async function handler(req, res) {
   // Try the chosen model first; if Groq has retired it or doesn't offer it, fall back to the next one.
   // Llama 3.3 70B was shut down by Groq on Aug 16, 2026; gpt-oss-120b is its recommended replacement.
   const models = [...new Set([process.env.MODEL, "openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"].filter(Boolean))];
-  let upstream, detail = {};
+  let upstream, detail = {}, sawDaily = false, sawMinute = false;
   for (const model of models) {
     try {
       upstream = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -82,12 +83,19 @@ module.exports = async function handler(req, res) {
     const msg = String(detail?.error?.message || "") + " " + String(detail?.error?.code || "");
     const modelProblem = (upstream.status === 400 || upstream.status === 404) && /model/i.test(msg);
     console.error("Groq error", upstream.status, model, msg.trim());
+    // Each model has its own allowance on Groq: when one is at its limit, the next one may still have room.
+    if (upstream.status === 429) { if (/per day|\(TPD\)|\(RPD\)/i.test(msg)) sawDaily = true; else sawMinute = true; continue; }
     if (!modelProblem) break;
   }
 
   if (!upstream.ok) {
     // Groq's own limit is shared by every visitor: when it is used up, say so plainly.
-    if (upstream.status === 429) return sendJSON(res, 429, { error: { message: "Today's free digs are used up. Come back tomorrow." } });
+    // Every model at its limit. A per-minute limit clears quickly; a daily one only tomorrow.
+    if (upstream.status === 429 || sawDaily || sawMinute) {
+      return sawMinute
+        ? sendJSON(res, 429, { error: { code: "busy", message: "The shop is busy right now. Try again in a minute." } })
+        : sendJSON(res, 429, { error: { code: "closed_today", message: "The shop is closed for digging until tomorrow." } });
+    }
     if (upstream.status === 401 || upstream.status === 403) return sendJSON(res, 500, { error: { message: "The server's Groq key wasn't accepted. Check GROQ_API_KEY in Vercel, then redeploy." } });
     return sendJSON(res, upstream.status, { error: { message: detail?.error?.message || "The AI service returned an error." } });
   }
