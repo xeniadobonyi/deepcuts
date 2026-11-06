@@ -8,13 +8,15 @@
 <meta property="og:site_name" content="Deep Cuts">
 <meta property="og:title" content="Deep Cuts – discover new music, build your record crates">
 <meta property="og:description" content="Discover new music, build your record crates.">
-<meta property="og:image" content="https://deepcuts-three.vercel.app/api/og?v=6">
+<meta property="og:image" content="https://digdeepcuts.com/api/og?v=6">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
 <script defer src="/_vercel/insights/script.js"></script>
+<meta property="og:url" content="https://digdeepcuts.com/">
+<link rel="canonical" href="https://digdeepcuts.com/">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://deepcuts-three.vercel.app/api/og?v=6">
+<meta name="twitter:image" content="https://digdeepcuts.com/api/og?v=6">
 <title>Deep Cuts – discover new music, build your record crates</title>
 <link rel="icon" id="favicon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2231%22 fill=%22%23111%22/%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2225%22 fill=%22none%22 stroke=%22%232a2a2a%22 stroke-width=%222%22/%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2219%22 fill=%22none%22 stroke=%22%232a2a2a%22 stroke-width=%222%22/%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%2213%22 fill=%22%23ff2d95%22/%3E%3Ccircle cx=%2232%22 cy=%2232%22 r=%222.5%22 fill=%22%23ececec%22/%3E%3C/svg%3E">
 <style>[hidden]{display:none!important} img{max-width:100%} :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
@@ -468,6 +470,7 @@ let openCrateRecord = null;
 // Where live digs come from: Claude inside claude.ai, or the Deep Cuts server at /api/dig when the site runs on Vercel.
 // A browser-saved API key is an owner-only test path, shown only at #connect.
 const SERVER_HOSTS = [".vercel.app", "digdeepcuts.com"]; // also matches www.digdeepcuts.com
+const SITE_URL = "https://digdeepcuts.com"; // shared crate links always use the real address
 const API_URL = SERVER_HOSTS.some((h) => location.hostname === h.replace(/^\./, "") || location.hostname.endsWith(h)) ? "/api/dig" : "";
 const OWNER_TEST = location.hash === "#connect";
 const MODEL = "claude-sonnet-5-5";
@@ -2231,7 +2234,7 @@ function crateLink(name, recs) {
   const data = { v: 1, n: String(name).slice(0, 60), r: recs.slice(0, CRATE_SIZE).map((p) => [p.artist, p.album, p.year || "", p.rgId || ""]) };
   const enc = b64u.enc(JSON.stringify(data));
   // On the public site, a short page address that link previews can read (/c/…); elsewhere, the page itself.
-  return API_URL ? location.origin + "/c/" + enc : location.origin + location.pathname + "#crate=" + enc;
+  return API_URL ? SITE_URL + "/c/" + enc : location.origin + location.pathname + "#crate=" + enc;
 }
 // Links come from anyone: read them strictly, as plain text, with limits.
 function readSharedCrate(hash) {

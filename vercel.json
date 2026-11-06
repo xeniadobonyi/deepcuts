@@ -1,5 +1,21 @@
 {
   "rewrites": [
-    { "source": "/c/:d", "destination": "/api/crate?d=:d" }
+    {
+      "source": "/c/:d",
+      "destination": "/api/crate?d=:d"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "deepcuts-three.vercel.app"
+        }
+      ],
+      "destination": "https://digdeepcuts.com/:path*",
+      "permanent": true
+    }
   ]
 }
