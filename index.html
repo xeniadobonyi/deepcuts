@@ -1434,16 +1434,15 @@ function lovedPeople(loved) {
   return Object.values(people).filter((x) => x.recs.length >= 2).sort((a, b) => b.recs.length - a.recs.length).slice(0, 5);
 }
 // ---------- Digger levels ----------
-// Levels grow with how deep you dig, not just how much you click: the higher ones need rare records.
-// Rarity is the average Discogs rarity bars of loved records; when Discogs data is missing it isn't required.
+// Levels are just for fun: they only count the records you love. No rarity or credit rules, nothing to game.
 const LEVELS = [
   { name: "Just Browsing" },
   { name: "Judging by the Cover", loved: 30 },
   { name: "Flicking Through the Bins", loved: 100 },
-  { name: "Back-of-the-Shop Browser", loved: 300, rarity: 2 },
-  { name: "Mixtape Maker", loved: 500, rarity: 2 },
-  { name: "Sleeve Reader", loved: 700, rarity: 3, credits: true },
-  { name: "Ultimate Digger", loved: 1000, rarity: 4, credits: true }
+  { name: "Back-of-the-Shop Browser", loved: 300 },
+  { name: "Mixtape Maker", loved: 500 },
+  { name: "Sleeve Reader", loved: 700 },
+  { name: "Ultimate Digger", loved: 1000 }
 ];
 function diggerStats() {
   const idx = pickIndex();
