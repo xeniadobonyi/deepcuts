@@ -1123,21 +1123,24 @@ async function gatherCandidates(seedList, onStep) {
         if (seed.year && y && Math.abs(+y - +seed.year) > 10) continue;
         rows.push({ artist: creditName(r["artist-credit"]), album: g.title, year: y, label: seed.label.name, rgId: g.id });
       }
-      const big = (lr?.["release-count"] || 0) > 300;
-      rows.sort((a, b) => Math.abs(+a.year - +seed.year || 0) - Math.abs(+b.year - +seed.year || 0))
+      // A big label (EMI, Columbia, Reprise…) put out everything from prog to Bond themes: sharing one says nothing
+      // about the music, so only small labels with their own sound count as a link.
+      seed.bigLabel = (lr?.["release-count"] || 0) > 300;
+      if (!seed.bigLabel) rows.sort((a, b) => Math.abs(+a.year - +seed.year || 0) - Math.abs(+b.year - +seed.year || 0))
         .filter((x, i, a) => a.findIndex((y) => lc(y.artist) === lc(x.artist)) === i)
-        .slice(0, big ? 4 : 8)
+        .slice(0, 6)
         .forEach((x) => add(x, `Released on ${seed.label.name}, the same label as ${seedName}`));
     }
 
     // Sister labels (imprints and parent labels) from the same era
-    if (seed.label && spare()) {
+    if (seed.label && !seed.bigLabel && spare()) {
       const lab = await mbc("label/" + seed.label.id, { inc: "label-rels" });
       const sister = (lab?.relations || []).find((r) => r.label && /imprint|ownership|subsidiary|label distribution|reissue/i.test(r.type || ""));
       if (sister && spare()) {
         onStep("Browsing the sister label " + sister.label.name + "…");
         const sr = await mbc("release", { label: sister.label.id, inc: "artist-credits+release-groups", limit: 100 });
-        for (const r of (sr?.releases || [])) {
+        const sisterBig = (sr?.["release-count"] || 0) > 300;
+        for (const r of (sisterBig ? [] : sr?.releases || [])) {
           const g = r["release-group"];
           if (!g?.id || (g["primary-type"] && g["primary-type"] !== "Album") || (g["secondary-types"] || []).length) continue;
           const y = yearOf(r.date || g["first-release-date"]);
@@ -1147,9 +1150,20 @@ async function gatherCandidates(seedList, onStep) {
         }
       }
     }
+    // Same style and era on Discogs: musically close records, for albums with few credits to follow.
+    if (seed.year && (seed.tags || []).length) {
+      const style = titleCase(seed.tags[0]);
+      onStep("Looking on Discogs for " + style + " records from around " + seed.year + "\u2026");
+      const d = await discogsAsk({ vibe: "1", style, from: String(+seed.year - 4), to: String(+seed.year + 4) });
+      for (const r of (d?.records || []).slice(0, 12)) {
+        add({ artist: r.artist, album: r.title, year: r.year, label: "", dcId: r.id, dc: { have: r.have || 0, want: r.want || 0, url: r.url, at: Date.now() } },
+          `Same style and era as ${seedName}: ${(r.styles || []).slice(0, 2).join(", ") || style}, ${r.year || seed.year}`);
+      }
+    }
   }
   return { seeds, candidates: [...cands.values()] };
 }
+const titleCase = (t) => String(t || "").replace(/\b([a-z])/g, (m) => m.toUpperCase());
 
 // ---------- Never repeat ----------
 // Records are compared loosely, so spelling differences don't let a repeat through:
@@ -1166,7 +1180,7 @@ function seenSets() {
 const isFresh = (p, S) => !S.keys.has(seenKey(p)) && !S.artists.has(normArtist(p.artist));
 
 // The kind of link behind a fact, so no single kind (like one big label) can fill a whole dig.
-const linkKind = (fact) => /^Sample source/.test(fact) ? "sample" : /label/i.test(fact) && /^Released on/.test(fact) ? "label"
+const linkKind = (fact) => /^Sample source/.test(fact) ? "sample" : /^Same style and era/.test(fact) ? "style" : /label/i.test(fact) && /^Released on/.test(fact) ? "label"
   : /is credited on/.test(fact) ? "credit" : /side project/i.test(fact) ? "side" : /is linked to/.test(fact) ? "member" : "other";
 const kindOf = (c) => linkKind((c.facts || [])[0] || "");
 // The specific link: one label, one credited person, one band member. Capped at 2 picks each.
@@ -1176,7 +1190,7 @@ function rankCandidates(candidates, seeds, seedList) {
   const seedArtists = new Set(seeds.map((x) => lc(x.artist)).concat(seedList.map((x) => lc(splitSeed(x).artist))));
   const S = seenSets();
   const perArtist = {};
-  const score = (c) => c.facts.length + (c.sample ? 3 : 0) + 2 * ((c.from || []).length - 1) - (c.facts.every((f) => linkKind(f) === "label") ? 0.5 : 0);
+  const score = (c) => c.facts.length + (c.sample ? 3 : 0) + 2 * ((c.from || []).length - 1) - (c.facts.every((f) => linkKind(f) === "label") ? 1.5 : 0);
   const ranked = candidates
     .filter((c) => (c.rgId || c.dcId) && c.artist && !seedArtists.has(lc(c.artist)) && isFresh(c, S) && !/various artists/i.test(c.artist))
     .sort((a, b) => score(b) - score(a))
@@ -1293,7 +1307,9 @@ function selectMix(list, n = 5) {
   const mix = mixNow(), chosen = [];
   // No more than 2 picks from the same kind of link (same label, credits, band members…), unless nothing else is left.
   const linkCount = (k) => chosen.filter((c) => c.facts && linkOf(c) === k).length;
-  const fits = (c) => !c.facts || linkCount(linkOf(c)) < 2;
+  // And at most one pick whose only link is a label, whichever label: a shared label alone is a weak reason.
+  const labelOnly = (c) => !!c.facts && c.facts.every((f) => linkKind(f) === "label");
+  const fits = (c) => !c.facts || (linkCount(linkOf(c)) < 2 && (!labelOnly(c) || chosen.filter(labelOnly).length < 1));
   for (const t of ["essential", "favourite", "deep"]) for (const c of list) { if (chosen.filter((x) => tierOf(x) === t).length >= mix[t]) break; if (tierOf(c) === t && fits(c)) chosen.push(c); }
   for (const strict of [true, false]) for (const t of ["deep", "favourite", "", "essential"]) for (const c of list) { if (chosen.length >= n) break; if (tierOf(c) === t && !chosen.includes(c) && (!strict || fits(c))) chosen.push(c); }
   chosen.sort((a, b) => TIER_ORDER.indexOf(tierOf(a)) - TIER_ORDER.indexOf(tierOf(b))); // familiar first, then down the rabbit hole
