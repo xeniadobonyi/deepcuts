@@ -31,7 +31,7 @@ One static page plus a few small server functions, all on free tiers.
 | Part | What it does |
 | --- | --- |
 | `index.html` | the whole site |
-| `api/dig.js` | sends each dig to an open model (gpt-oss) on [Groq](https://groq.com) and streams the answer back; the key stays on the server |
+| `api/dig.js` | sends each AI request to [Claude](https://www.anthropic.com/claude) or an open model (gpt-oss) on [Groq](https://groq.com) and streams the answer back: picks go to Claude Sonnet first, behind-the-scenes calls to Groq, and each backs up the other; keys stay on the server |
 | `api/mb.js` | cached, rate-limited MusicBrainz lookups: credits, relationships, labels, samples |
 | `api/discogs.js` | Discogs collector counts, credits, and the backup for records MusicBrainz doesn't know; also powers vibe digs by style, country and years |
 | `api/cover.js` | checks each album exists and finds its cover on the [Cover Art Archive](https://coverartarchive.org) |
@@ -43,16 +43,17 @@ I built it with AI as a coding partner: I made the product and design decisions,
 
 1. Create a free API key at [console.groq.com](https://console.groq.com).
 2. Import this repo as a new project on [Vercel](https://vercel.com) (the free Hobby plan is enough) and deploy.
-3. In Settings → Environment Variables, add `GROQ_API_KEY`. Then redeploy.
+3. In Settings → Environment Variables, add `GROQ_API_KEY`, and optionally `ANTHROPIC_API_KEY` (from [console.anthropic.com](https://console.anthropic.com)) to have Claude choose the picks. Then redeploy. With only one key, that service does everything.
 4. To use your own domain, add it in Vercel and to `SERVER_HOSTS` and `SITE_URL` near the top of the script in `index.html`.
 
 Optional environment variables:
 
 - `DISCOGS_TOKEN`: a free personal access token from discogs.com → Settings → Developers. Turns on rarity, collector counts and Discogs credits. Discogs' API terms apply.
+- `CLAUDE_MODEL`: the Claude model for picks (default `claude-sonnet-5-5`; `claude-haiku-5-5` is cheaper and faster).
 - `MODEL`: the Groq model to use (default `openai/gpt-oss-120b`; a smaller model is tried when it's busy).
 - `REQUESTS_PER_DAY`: AI requests allowed per visitor per day (default 150, `0` turns it off).
 
-Groq's free allowance is shared by all visitors, so on a very busy day the shop may close for digging until the next day.
+If every model is busy or out of allowance at once, the shop shows a friendly "busy" or "closed for digging until tomorrow" message. Set a spend limit in the Anthropic Console to cap costs; when it's reached, Groq takes over.
 
 ## License
 

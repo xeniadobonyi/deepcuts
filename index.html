@@ -527,7 +527,9 @@ function parseJSONLoose(t) {
   throw { code: "invalid_json", text: t.trim().slice(0, 140) };
 }
 
-async function askClaude(prompt, { signal, onText } = {}) {
+// task: "pick" (the five records and their reasons), "plan" (vibe → searches) or "taste" (the profile analysis).
+// The server sends picks to Claude and the rest to Groq, each backing up the other.
+async function askClaude(prompt, { signal, onText, task = "pick" } = {}) {
   if (sample) return sample.json(prompt, { signal, cache: false, onText });
   const direct = !API_URL, key = getKey();
   if (direct && !key) throw { code: "no_ai" };
@@ -536,7 +538,7 @@ async function askClaude(prompt, { signal, onText } = {}) {
   if (direct) {
     Object.assign(headers, { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" });
     body = { model: MODEL, max_tokens: 3000, stream: true, messages: [{ role: "user", content: prompt }] };
-  } else body = { prompt };
+  } else body = { prompt, task };
   let res;
   // Phones drop connections now and then (switching apps, changing networks): try once more before giving up.
   for (let attempt = 0; ; attempt++) {
@@ -1378,7 +1380,7 @@ function buildVibeDataPrompt(mood, pool, place = "") {
 async function vibeFromDiscogs(mood, onText) {
   setStatus("Working out where to look on Discogs\u2026");
   let plan = null;
-  try { plan = await askClaude(vibePlanPrompt(mood), { signal: ctl.signal }); }
+  try { plan = await askClaude(vibePlanPrompt(mood), { signal: ctl.signal, task: "plan" }); }
   catch (e) { if (e?.code === "cancelled") throw e; return []; }
   const list = Array.isArray(plan) ? plan : (plan?.searches || Object.values(plan || {}).find(Array.isArray) || []);
   const searches = list.filter((x) => x && (x.genre || x.style || x.label)).slice(0, 3);
@@ -2577,7 +2579,7 @@ async function writeSummary(manual) {
       "- genres: the 3 to 5 genres that best describe the loved records, 1 to 3 words each, most important first.",
       "Be specific and plain. No flattery and no invented facts: base every claim on the lists.",
       'Reply with only JSON: {"loves": string, "avoids": string, "genres": [string]}'
-    ].join("\n"));
+    ].join("\n"), { task: "taste" });
     // Free models vary their key names a little; accept the common variants.
     const pickKey = (o, ...ks) => { if (!o || typeof o !== "object") return undefined; for (const k of Object.keys(o)) if (ks.includes(k.toLowerCase())) return o[k]; return undefined; };
     const obj = Array.isArray(res) ? res[0] : res;
