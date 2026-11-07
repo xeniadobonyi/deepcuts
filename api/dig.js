@@ -59,7 +59,8 @@ async function tryClaude(prompt) {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
       // No temperature: newer Claude models reject it and choose their own.
-      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 6000, stream: true, system: SYSTEM, messages: [{ role: "user", content: prompt }] }),
+      // No private thinking first: choosing five records from a list doesn't need it, and it delays the first word.
+      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 4000, stream: true, thinking: { type: "disabled" }, system: SYSTEM, messages: [{ role: "user", content: prompt }] }),
     });
   } catch { return { ok: false, why: "unreachable" }; }
   if (!r.ok) {
@@ -166,7 +167,7 @@ async function relay(got, res) {
         if (!data || data === "[DONE]") continue;
         let ev;
         try { ev = JSON.parse(data); } catch { continue; }
-        const t = ev?.type || (ev?.choices ? "choice" : "other");
+        const t = (ev?.type || (ev?.choices ? "choice" : "other")) + (ev?.content_block?.type ? ":" + ev.content_block.type : "");
         types[t] = (types[t] || 0) + 1;
         stop = ev?.delta?.stop_reason || ev?.choices?.[0]?.finish_reason || stop;
         const text = got.textOf(ev);
