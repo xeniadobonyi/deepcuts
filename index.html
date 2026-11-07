@@ -538,8 +538,15 @@ async function askClaude(prompt, { signal, onText } = {}) {
     body = { model: MODEL, max_tokens: 3000, stream: true, messages: [{ role: "user", content: prompt }] };
   } else body = { prompt };
   let res;
-  try { res = await fetch(direct ? "https://api.anthropic.com/v1/messages" : API_URL, { method: "POST", headers, body: JSON.stringify(body), signal }); }
-  catch (e) { throw { code: e?.name === "AbortError" ? "cancelled" : "network" }; }
+  // Phones drop connections now and then (switching apps, changing networks): try once more before giving up.
+  for (let attempt = 0; ; attempt++) {
+    try { res = await fetch(direct ? "https://api.anthropic.com/v1/messages" : API_URL, { method: "POST", headers, body: JSON.stringify(body), signal }); break; }
+    catch (e) {
+      if (e?.name === "AbortError") throw { code: "cancelled" };
+      if (attempt >= 1) { console.warn("Dig request failed:", e); throw { code: "network" }; }
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
   if (!res.ok) {
     let msg = "", code = ""; try { const e = (await res.json())?.error; msg = e?.message || ""; code = e?.code || ""; } catch {}
     if (ERR[code]) throw { code, message: msg };
@@ -835,8 +842,8 @@ const ERR = {
   none_verified: "None of the suggested records could be confirmed as real albums. Try adding another record you love, or a better-known one.",
   mb_busy: "MusicBrainz, which we use to check every record is real, is busy right now. Try again in a minute.",
   no_ai: "Live digs aren't switched on for this address yet. The sample dig below shows how it works.",
-  bad_key: "That API key wasn't accepted. Check it in the Claude Console, then save it again.",
-  network: "Couldn't reach Claude. Check your connection and press Dig again.",
+  bad_key: API_URL ? "The shop can't reach its AI right now. Try again in a few minutes." : "That API key wasn't accepted. Check it in the Claude Console, then save it again.",
+  network: "Couldn't reach the shop. Check your connection and press Dig again.",
   overloaded: "The shop is busy right now. Try again in a minute."
 };
 
