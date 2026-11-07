@@ -31,7 +31,7 @@ One static page plus a few small server functions, all on free tiers.
 | Part | What it does |
 | --- | --- |
 | `index.html` | the whole site |
-| `api/dig.js` | sends each AI request to [Claude](https://www.anthropic.com/claude) or an open model (gpt-oss) on [Groq](https://groq.com) and streams the answer back: picks go to Claude Sonnet first, behind-the-scenes calls to Groq, and each backs up the other; keys stay on the server |
+| `api/dig.js` | sends each AI request to [Claude](https://www.anthropic.com/claude) or an open model (gpt-oss) on [Groq](https://groq.com) and streams the answer back: picks go to Groq first (or Claude, with `PICKS_BY=claude`), and each backs up the other; keys stay on the server |
 | `api/mb.js` | cached, rate-limited MusicBrainz lookups: credits, relationships, labels, samples |
 | `api/discogs.js` | Discogs collector counts, credits, and the backup for records MusicBrainz doesn't know; also powers vibe digs by style, country and years |
 | `api/cover.js` | checks each album exists and finds its cover on the [Cover Art Archive](https://coverartarchive.org) |
@@ -49,6 +49,7 @@ I built it with AI as a coding partner: I made the product and design decisions,
 Optional environment variables:
 
 - `DISCOGS_TOKEN`: a free personal access token from discogs.com → Settings → Developers. Turns on rarity, collector counts and Discogs credits. Discogs' API terms apply.
+- `PICKS_BY`: `groq` (default, fastest) or `claude` to have Claude choose the picks.
 - `CLAUDE_MODEL`: the Claude model for picks (default `claude-sonnet-5-5`; `claude-haiku-5-5` is cheaper and faster).
 - `MODEL`: the Groq model to use (default `openai/gpt-oss-120b`; a smaller model is tried when it's busy).
 - `REQUESTS_PER_DAY`: AI requests allowed per visitor per day (default 150, `0` turns it off).

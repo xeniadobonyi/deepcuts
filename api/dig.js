@@ -45,6 +45,10 @@ function delta(text) {
 
 const SYSTEM = "You are a precise music expert. When asked for JSON, reply with valid JSON only: no markdown, no headings, no extra text.";
 const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-sonnet-5-5";
+// Who chooses the picks: "groq" (fast, default) or "claude" (set PICKS_BY=claude in Vercel). The other is the backup.
+const PICKS_BY = (process.env.PICKS_BY || "groq").toLowerCase();
+// A model that hasn't started writing within this time is skipped for the other one, so a dig never hangs on it.
+const FIRST_TEXT_MS = Number(process.env.FIRST_TEXT_MS || 15000);
 
 // Claude: one model. Returns { ok: true, read } or { ok: false, why }.
 async function tryClaude(prompt) {
@@ -113,15 +117,16 @@ module.exports = async function handler(req, res) {
     return sendJSON(res, 400, { error: { message: "Prompt missing or too long." } });
   }
 
-  const order = task === "plan" || task === "taste" ? [tryGroq, tryClaude] : [tryClaude, tryGroq];
+  const order = task === "plan" || task === "taste" || PICKS_BY !== "claude" ? [tryGroq, tryClaude] : [tryClaude, tryGroq];
   const whys = [];
   for (const attempt of order) {
+    const t0 = Date.now();
     const got = await attempt(prompt);
     if (!got.ok) { whys.push(got.why); continue; }
     // Nothing is sent to the visitor until real text arrives, so an empty answer can still be retried elsewhere.
     const r = await relay(got, res);
-    if (r.wrote) { console.log("AI answered", JSON.stringify({ task: task || "pick", model: got.model, chars: r.chars })); return; }
-    console.error("Empty answer", JSON.stringify({ task: task || "pick", model: got.model, stop: r.stop, events: r.types, error: r.err }));
+    if (r.wrote) { console.log("AI answered", JSON.stringify({ task: task || "pick", model: got.model, chars: r.chars, firstTextMs: r.firstMs, totalMs: Date.now() - t0 })); return; }
+    console.error("Empty answer", JSON.stringify({ task: task || "pick", model: got.model, stop: r.stop, events: r.types, error: r.err, timedOut: r.timedOut, totalMs: Date.now() - t0 }));
     whys.push(r.err && /overload|rate/i.test(r.err) ? "busy" : "empty");
     if (res.headersSent) return res.end();
   }
@@ -135,7 +140,10 @@ module.exports = async function handler(req, res) {
 async function relay(got, res) {
   const reader = got.body.getReader();
   const dec = new TextDecoder();
-  let buf = "", chars = 0, stop = "", err = "";
+  let buf = "", chars = 0, stop = "", err = "", firstMs = 0, timedOut = false;
+  const t0 = Date.now();
+  // Give up on a model that hasn't written anything yet after FIRST_TEXT_MS.
+  const timer = setTimeout(() => { if (!chars) { timedOut = true; try { reader.cancel(); } catch {} } }, FIRST_TEXT_MS);
   const types = {};
   const start = () => {
     if (res.headersSent) return;
@@ -162,7 +170,7 @@ async function relay(got, res) {
         types[t] = (types[t] || 0) + 1;
         stop = ev?.delta?.stop_reason || ev?.choices?.[0]?.finish_reason || stop;
         const text = got.textOf(ev);
-        if (text) { start(); res.write(delta(text)); chars += text.length; }
+        if (text) { if (!chars) firstMs = Date.now() - t0; start(); res.write(delta(text)); chars += text.length; }
         const e = got.errOf(ev);
         if (e) err = e;
       }
@@ -170,9 +178,10 @@ async function relay(got, res) {
   } catch {
     // Visitor left or the stream broke; nothing more to send.
   }
+  clearTimeout(timer);
   if (chars) {
     if (err) res.write("data: " + JSON.stringify({ type: "error", error: { type: /overload/i.test(err) ? "overloaded_error" : "api_error", message: err } }) + "\n\n");
     res.end();
   }
-  return { wrote: chars > 0, chars, stop, types, err };
+  return { wrote: chars > 0, chars, stop, types, err, firstMs, timedOut };
 }
