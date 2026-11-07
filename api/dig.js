@@ -55,7 +55,7 @@ async function tryClaude(prompt) {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
       // No temperature: newer Claude models reject it and choose their own.
-      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 3000, stream: true, system: SYSTEM, messages: [{ role: "user", content: prompt }] }),
+      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 6000, stream: true, system: SYSTEM, messages: [{ role: "user", content: prompt }] }),
     });
   } catch { return { ok: false, why: "unreachable" }; }
   if (!r.ok) {
@@ -114,28 +114,36 @@ module.exports = async function handler(req, res) {
   }
 
   const order = task === "plan" || task === "taste" ? [tryGroq, tryClaude] : [tryClaude, tryGroq];
-  let got = null; const whys = [];
+  const whys = [];
   for (const attempt of order) {
-    const r = await attempt(prompt);
-    if (r.ok) { got = r; break; }
-    whys.push(r.why);
+    const got = await attempt(prompt);
+    if (!got.ok) { whys.push(got.why); continue; }
+    // Nothing is sent to the visitor until real text arrives, so an empty answer can still be retried elsewhere.
+    const r = await relay(got, res);
+    if (r.wrote) { console.log("AI answered", JSON.stringify({ task: task || "pick", model: got.model, chars: r.chars })); return; }
+    console.error("Empty answer", JSON.stringify({ task: task || "pick", model: got.model, stop: r.stop, events: r.types, error: r.err }));
+    whys.push(r.err && /overload|rate/i.test(r.err) ? "busy" : "empty");
+    if (res.headersSent) return res.end();
   }
-  if (!got) {
-    // Nobody could answer. A per-minute limit clears quickly; a used-up day only tomorrow.
-    if (whys.includes("busy")) return sendJSON(res, 429, { error: { code: "busy", message: "The shop is busy right now. Try again in a minute." } });
-    if (whys.includes("closed")) return sendJSON(res, 429, { error: { code: "closed_today", message: "The shop is closed for digging until tomorrow." } });
-    return sendJSON(res, 502, { error: { code: "busy", message: "The shop is busy right now. Try again in a minute." } });
-  }
-  console.log("AI answered", JSON.stringify({ task: task || "pick", model: got.model }));
+  // Nobody could answer. A per-minute limit clears quickly; a used-up day only tomorrow.
+  if (whys.includes("closed") && !whys.includes("busy")) return sendJSON(res, 429, { error: { code: "closed_today", message: "The shop is closed for digging until tomorrow." } });
+  return sendJSON(res, 429, { error: { code: "busy", message: "The shop is busy right now. Try again in a minute." } });
+};
 
-  res.statusCode = 200;
-  res.setHeader("content-type", "text/event-stream");
-  res.setHeader("cache-control", "no-cache");
-  res.setHeader("x-dc-model", got.model);
-
+// Streams one model's answer to the visitor in the event format the page reads.
+// Returns how much text was sent, plus what came back when there was none (for the logs).
+async function relay(got, res) {
   const reader = got.body.getReader();
   const dec = new TextDecoder();
-  let buf = "";
+  let buf = "", chars = 0, stop = "", err = "";
+  const types = {};
+  const start = () => {
+    if (res.headersSent) return;
+    res.statusCode = 200;
+    res.setHeader("content-type", "text/event-stream");
+    res.setHeader("cache-control", "no-cache");
+    res.setHeader("x-dc-model", got.model);
+  };
   try {
     for (;;) {
       const { done, value } = await reader.read();
@@ -150,14 +158,21 @@ module.exports = async function handler(req, res) {
         if (!data || data === "[DONE]") continue;
         let ev;
         try { ev = JSON.parse(data); } catch { continue; }
+        const t = ev?.type || (ev?.choices ? "choice" : "other");
+        types[t] = (types[t] || 0) + 1;
+        stop = ev?.delta?.stop_reason || ev?.choices?.[0]?.finish_reason || stop;
         const text = got.textOf(ev);
-        if (text) res.write(delta(text));
-        const err = got.errOf(ev);
-        if (err) res.write("data: " + JSON.stringify({ type: "error", error: { type: /overload/i.test(err) ? "overloaded_error" : "api_error", message: err } }) + "\n\n");
+        if (text) { start(); res.write(delta(text)); chars += text.length; }
+        const e = got.errOf(ev);
+        if (e) err = e;
       }
     }
   } catch {
     // Visitor left or the stream broke; nothing more to send.
   }
-  res.end();
-};
+  if (chars) {
+    if (err) res.write("data: " + JSON.stringify({ type: "error", error: { type: /overload/i.test(err) ? "overloaded_error" : "api_error", message: err } }) + "\n\n");
+    res.end();
+  }
+  return { wrote: chars > 0, chars, stop, types, err };
+}
