@@ -12,7 +12,21 @@ const clean = (s) => String(s || "").replace(/\s+/g, " ").trim().slice(0, 200);
 const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
   .replace(/\s*[\(\[][^)\]]*[\)\]]/g, " ").replace(/\s+-\s+.*(remaster|version|mix|edit|live|mono|stereo).*$/i, "")
   .replace(/^the\s+/, "").replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
-const sameArtist = (a, b) => { const x = norm(a), y = norm(b); return !!x && !!y && (x === y || x.includes(y) || y.includes(x)); };
+// Covers, karaoke and tributes often carry the original artist's name ("Originally performed by Nick Drake"),
+// so anything that looks like one is never a match, whatever the name says.
+const NOT_ORIGINAL = /karaoke|tribute|originally|made famous|in the style of|as performed|cover version|covers?\b|lullaby|lullabies|instrumental version|piano version|rendition|re-?recorded|sound-?alike|backing track|minus one/i;
+// Same artist: identical, or the same name plus an ensemble word ("Bill Evans" = "Bill Evans Trio").
+const ENSEMBLE = /^(trio|quartet|quintet|sextet|septet|octet|band|orchestra|group|and(his|her|the)\w*|andfriends|experience|ensemble|bigband)$/;
+const sameArtist = (a, b) => {
+  if (NOT_ORIGINAL.test(a || "") || NOT_ORIGINAL.test(b || "")) return false;
+  const x = norm(a), y = norm(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [long, short] = x.length > y.length ? [x, y] : [y, x];
+  return long.startsWith(short) && ENSEMBLE.test(long.slice(short.length));
+};
+// The track or album itself must not be a cover, karaoke or tribute release either.
+const original = (...names) => !names.some((n) => NOT_ORIGINAL.test(n || ""));
 const sameTitle = (a, b) => { const x = norm(a), y = norm(b); return !!x && !!y && (x === y || (Math.min(x.length, y.length) >= 6 && (x.startsWith(y) || y.startsWith(x)))); };
 
 async function getJSON(url) {
@@ -22,14 +36,15 @@ async function getJSON(url) {
 }
 
 // ---- Deezer ----
-async function deezerSong(artist, song) {
+async function deezerSong(artist, song, album) {
   const d = await getJSON("https://api.deezer.com/search?limit=25&q=" + encodeURIComponent(`artist:"${artist}" track:"${song}"`));
-  const t = (d.data || []).find((x) => x.preview && sameArtist(x.artist?.name, artist) && (sameTitle(x.title, song) || sameTitle(x.title_short, song)));
+  const hits = (d.data || []).filter((x) => x.preview && sameArtist(x.artist?.name, artist) && (sameTitle(x.title, song) || sameTitle(x.title_short, song)) && original(x.title, x.album?.title));
+  const t = hits.find((x) => album && sameTitle(x.album?.title, album)) || hits[0];
   return t ? { preview: t.preview, title: t.title_short || t.title, artist: t.artist?.name, album: t.album?.title, link: t.link, source: "Deezer" } : null;
 }
 async function deezerAlbum(artist, album) {
   const d = await getJSON("https://api.deezer.com/search/album?limit=10&q=" + encodeURIComponent(`artist:"${artist}" album:"${album}"`));
-  const a = (d.data || []).find((x) => sameArtist(x.artist?.name, artist) && sameTitle(x.title, album));
+  const a = (d.data || []).find((x) => sameArtist(x.artist?.name, artist) && sameTitle(x.title, album) && original(x.title));
   if (!a) return null;
   const tr = await getJSON("https://api.deezer.com/album/" + a.id + "/tracks?limit=50");
   const t = (tr.data || []).find((x) => x.preview);
@@ -41,12 +56,13 @@ async function appleSongs(term) {
   const d = await getJSON("https://itunes.apple.com/search?media=music&entity=song&limit=50&term=" + encodeURIComponent(term));
   return (d.results || []).filter((x) => x.previewUrl);
 }
-async function appleSong(artist, song) {
-  const t = (await appleSongs(artist + " " + song)).find((x) => sameArtist(x.artistName, artist) && sameTitle(x.trackName, song));
+async function appleSong(artist, song, album) {
+  const hits = (await appleSongs(artist + " " + song)).filter((x) => sameArtist(x.artistName, artist) && sameTitle(x.trackName, song) && original(x.trackName, x.collectionName, x.collectionArtistName));
+  const t = hits.find((x) => album && sameTitle(x.collectionName, album)) || hits[0];
   return t ? { preview: t.previewUrl, title: t.trackName, artist: t.artistName, album: t.collectionName, link: t.trackViewUrl, source: "Apple Music" } : null;
 }
 async function appleAlbum(artist, album) {
-  const tracks = (await appleSongs(artist + " " + album)).filter((x) => sameArtist(x.artistName, artist) && sameTitle(x.collectionName, album))
+  const tracks = (await appleSongs(artist + " " + album)).filter((x) => sameArtist(x.artistName, artist) && sameTitle(x.collectionName, album) && original(x.trackName, x.collectionName, x.collectionArtistName))
     .sort((a, b) => (a.discNumber || 1) - (b.discNumber || 1) || (a.trackNumber || 99) - (b.trackNumber || 99));
   const t = tracks[0];
   return t ? { preview: t.previewUrl, title: t.trackName, artist: t.artistName, album: t.collectionName, link: t.trackViewUrl, source: "Apple Music", fallback: true } : null;
@@ -64,8 +80,8 @@ module.exports = async function handler(req, res) {
   if (!artist || (!song && !album)) return send(400, { error: "artist and song or album required" });
 
   const steps = [
-    song && (() => deezerSong(artist, song)),
-    song && (() => appleSong(artist, song)),
+    song && (() => deezerSong(artist, song, album)),
+    song && (() => appleSong(artist, song, album)),
     album && (() => deezerAlbum(artist, album)),
     album && (() => appleAlbum(artist, album)),
   ].filter(Boolean);
