@@ -304,6 +304,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="links" id="spinLinks" aria-label="Listen to this record"></div>
     <div class="spin-actions">
       <button type="button" class="btn" id="spinDig">Dig from this record →</button>
+      <button type="button" class="btn ghost" id="spinPrev" disabled>&larr; Previous</button>
       <button type="button" class="btn ghost" id="spinNext">Next record</button>
     </div>
   </section>
@@ -2130,12 +2131,23 @@ function notePlayed(p) {
   played.push(k);
   store.set("dc-spin-played", played.slice(-SPIN_PLAYED_MAX));
 }
-function renderSpin() {
-  const p = pickSpin();
+// What this visit has played, so "Previous" can go back and "Next" forward again before picking a new one.
+const spinTrail = []; let spinAt = -1;
+function renderSpin(given) {
+  const p = given || pickSpin();
   if (!p) return;
   spinNow = p;
+  if (!given) {
+    // First record of this visit: the one from last time is "Previous", so a refresh never loses a record you liked.
+    if (!spinTrail.length) {
+      const lastKey = store.get("dc-spin-last", "");
+      const last = lastKey && [...spinPool.map((x) => ({ ...x, mine: true })), ...SHOP_PICKS].find((x) => seenKey(x) === lastKey);
+      if (last && seenKey(last) !== seenKey(p)) spinTrail.push(last);
+    }
+    spinTrail.splice(spinAt + 1 || spinTrail.length); spinTrail.push(p); spinAt = spinTrail.length - 1; notePlayed(p);
+  }
+  $("spinPrev").disabled = spinAt <= 0;
   store.set("dc-spin-last", seenKey(p));
-  notePlayed(p);
   // The visitor's own clock: from 18:00 until 5:00 it's tonight's pick, the rest of the day today's.
   const hr = new Date().getHours();
   $("spinSource").textContent = p.mine ? "Spinning for you" : (hr >= 18 || hr < 5 ? "Tonight's" : "Today's") + " pick from the shop";
@@ -2273,7 +2285,8 @@ $("spinLove").onclick = () => {
   const lv = diggerLevel();
   $("spinNote").textContent = undo ? "Removed from your crate." : "Saved to your crate." + (lv > levelBefore ? " Level up: " + LEVELS[lv].name + "!" : "");
 };
-$("spinNext").onclick = () => renderSpin();
+$("spinNext").onclick = () => (spinAt < spinTrail.length - 1 ? renderSpin(spinTrail[++spinAt]) : renderSpin());
+$("spinPrev").onclick = () => { if (spinAt > 0) renderSpin(spinTrail[--spinAt]); };
 $("spinDig").onclick = () => { if (spinNow) digFromRecords([spinNow]); };
 
 // ---------- Sharing a crate as a link ----------
