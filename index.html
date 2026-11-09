@@ -217,6 +217,21 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .spin-meta { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .spin-from { font-size: 14px; color: var(--muted); }
 .spin-why { margin: 0; max-width: 62ch; }
+/* One calm column: name, one info line, the reason, Loved it. The record sits beside it. */
+.spin-body { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "deck name" "deck meta" "deck why" "deck react"; column-gap: 18px; row-gap: 6px; align-items: start; align-content: center; }
+.spin-deck { grid-area: deck; align-self: center; }
+.spin-info { display: contents; }
+.spin-name { grid-area: name; } .spin-meta { grid-area: meta; } .spin-info .spin-why { grid-area: why; } .spin-info .react { grid-area: react; }
+.spin-meta .rarity-on { color: var(--fg); letter-spacing: .08em; } .spin-meta .rarity-off { opacity: .45; letter-spacing: .08em; }
+.spin-meta .spin-counts a { color: inherit; }
+.spin-sep { white-space: pre; } .spin-meter { white-space: nowrap; }
+/* Phones: the reason goes full width under the record, artist and album stack, own/want stay on Discogs. */
+@media (max-width: 520px) {
+  .spin-body { grid-template-areas: "deck name" "deck meta" "deck react" "why why"; column-gap: 14px; }
+  .spin-info .spin-why { margin-top: 8px; }
+  .spin-name .spin-sep { display: none; } .spin-name .spin-album { display: block; }
+  .spin-meta .spin-counts { display: none; }
+}
 .spin-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .share-row { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .share-panel { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 420px; border: 1px solid var(--rule); background: var(--surface); padding: 12px; box-sizing: border-box; }
@@ -318,17 +333,16 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <div class="spin-info">
         <p class="spin-name" id="spinName"></p>
         <span class="spin-meta" id="spinMeta"></span>
-        <span class="spin-preview" id="spinPreview" aria-live="polite" hidden></span>
-        <div id="spinRarity"></div>
+        <p class="spin-why" id="spinWhy"></p>
         <div class="react"><button type="button" class="chip" data-r="loved" id="spinLove" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/></svg><span id="spinLoveText">Loved it</span></button><span class="react-note" id="spinNote" aria-live="polite"></span></div>
       </div>
     </div>
-    <p class="spin-why" id="spinWhy"></p>
+    <span class="spin-preview" id="spinPreview" aria-live="polite" hidden></span>
     <div class="links" id="spinLinks" aria-label="Listen to this record"></div>
     <div class="spin-actions">
-      <button type="button" class="btn" id="spinDig">Dig from this record →</button>
+      <button type="button" class="btn" id="spinDig">Dig from this record</button>
       <button type="button" class="btn ghost" id="spinPrev" disabled>&larr; Previous</button>
-      <button type="button" class="btn ghost" id="spinNext">Next record</button>
+      <button type="button" class="btn ghost" id="spinNext">Next record &rarr;</button>
     </div>
   </section>
 
@@ -2197,11 +2211,17 @@ function renderSpin(given) {
 }
 // The record now spinning gets its Discogs own/want line too. Looked up in the background; the server caches it for hours.
 async function showSpinRarity(p) {
-  const box = $("spinRarity"); box.replaceChildren();
+  // One quiet line: 1957 · ESSENTIAL ▮▯▯▯▯ · 13,691 own / 15,746 want (phones leave out the numbers).
   const show = () => {
     if (spinNow !== p || !dcFresh(p.dc)) return;
-    box.replaceChildren(rarityLine(p));
-    $("spinMeta").textContent = p.year || "";
+    const bars = rarityBars(p.dc), t = tierOf(p), meta = $("spinMeta");
+    const on = Object.assign(document.createElement("span"), { className: "rarity-on", textContent: "\u25ae".repeat(bars) });
+    const off = Object.assign(document.createElement("span"), { className: "rarity-off", textContent: "\u25af".repeat(5 - bars) });
+    const meter = document.createElement("span"); meter.className = "spin-meter"; meter.setAttribute("aria-label", "Rarity " + bars + " out of 5");
+    meter.append((t ? TIER_NAMES[t].toUpperCase() : "RARITY") + " ", on, off);
+    const counts = document.createElement("span"); counts.className = "spin-counts";
+    counts.append(" \u00b7 ", p.dc.url ? linkEl(count(p.dc.have) + (p.dc.many ? "+" : "") + " own", p.dc.url) : count(p.dc.have) + " own", " / " + count(p.dc.want) + " want");
+    meta.replaceChildren(p.year ? p.year + " \u00b7 " : "", meter, counts);
   };
   if (dcFresh(p.dc)) return show();
   if (!API_URL || !discogsOn) return;
@@ -2337,9 +2357,10 @@ function showSpinTitle(p) {
   if (p.song) {
     const t = document.createElement("b"); t.textContent = "\u201c" + p.song + "\u201d";
     const by = document.createElement("span"); by.textContent = p.artist;
-    const from = document.createElement("span"); from.className = "spin-from";
-    from.append("from ", Object.assign(document.createElement("i"), { textContent: p.album }), p.songNote ? " \u00b7 " + p.songNote : "");
-    name.append(t, document.createElement("br"), by, document.createElement("br"), from);
+    const sep = Object.assign(document.createElement("span"), { className: "spin-sep", textContent: " \u00b7 " });
+    const from = document.createElement("span"); from.className = "spin-from spin-album";
+    from.append(Object.assign(document.createElement("i"), { textContent: p.album }), p.songNote ? " \u00b7 " + p.songNote : "");
+    name.append(t, document.createElement("br"), by, sep, from);
   } else {
     const b = document.createElement("b"); b.textContent = p.artist;
     const i = document.createElement("i"); i.textContent = p.album;
