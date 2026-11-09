@@ -188,13 +188,22 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .spin-source { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .spin-body { display: flex; gap: 16px; align-items: center; }
 .spin-deck { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
-/* A small round button in the middle of the record. The visible dot is 28px; the tappable area stays 44px. */
-.spin-play { position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; margin: -22px 0 0 -22px; border: 0; background: none; padding: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.spin-play > span { width: 28px; height: 28px; border-radius: 50%; background: #111; color: #fff; font-size: 10px; line-height: 1; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
-.spin-play[hidden] { display: none; }
-.spin-play:focus-visible { outline: none; }
-.spin-play:focus-visible > span { box-shadow: 0 0 0 3px var(--fg); }
-.spin-play[aria-busy="true"] { opacity: .6; cursor: progress; }
+/* The tonearm: tap it to drop the needle and play a 30-second preview; tap again to lift it.
+   At rest it sits off the record on the right; while playing it swings onto the outer grooves. */
+.spin-deck { width: 150px; }
+.spin-deck .spin-disc { width: 120px; height: 120px; }
+.arm { position: absolute; left: 114px; top: 0; width: 44px; height: 112px; border: 0; padding: 0; background: none; cursor: pointer; }
+.arm:disabled { cursor: default; }
+.arm-pivot { position: absolute; left: 15px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--fg); box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--fg); }
+.arm-rod { position: absolute; left: 20.5px; top: 10px; width: 3px; height: 80px; background: var(--fg); box-shadow: 0 0 0 1px var(--surface); transform-origin: 1.5px 0; transform: rotate(-6deg); transition: transform .7s cubic-bezier(.3, .1, .2, 1); }
+.arm-head { position: absolute; left: -3px; bottom: -14px; width: 9px; height: 15px; background: var(--pink); border: 1px solid var(--fg); box-sizing: border-box; }
+.arm[aria-pressed="true"] .arm-rod { transform: rotate(21deg); }
+.arm[aria-busy="true"] .arm-rod { transform: rotate(8deg); }
+.arm:not(:disabled):hover .arm-rod { transform: rotate(-2deg); }
+.arm[aria-pressed="true"]:hover .arm-rod { transform: rotate(19deg); }
+.arm:disabled .arm-head { background: var(--surface); }
+.arm:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .arm-rod { transition: none; } }
 .spin-preview { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .spin-preview a { color: inherit; }
 
@@ -304,7 +313,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="spin-body">
       <div class="spin-deck">
         <div class="spin-disc" id="spinDisc" aria-hidden="true"><div class="spin-label" id="spinLabel"></div><div class="spin-hole"></div></div>
-        <button type="button" class="spin-play" id="spinPlay" aria-label="Play a 30-second preview" hidden><span aria-hidden="true" id="spinPlayIcon">&#9654;</span></button>
+        <button type="button" class="arm" id="spinPlay" aria-label="Play a 30-second preview" aria-pressed="false" disabled><span class="arm-rod" aria-hidden="true"><span class="arm-head"></span></span><span class="arm-pivot" aria-hidden="true"></span></button>
       </div>
       <div class="spin-info">
         <p class="spin-name" id="spinName"></p>
@@ -2215,11 +2224,17 @@ const spinAudio = typeof Audio === "function" ? new Audio() : null;
 if (spinAudio) spinAudio.preload = "none";
 let spinPreviewFor = null, spinKeepPlaying = false, spinCarry = false, spinSkips = 0;
 const previewCache = new Map();
-function setPlayButton(state) { // "play", "pause", "busy"
+function setPlayButton(state) { // "play" (arm up), "pause" (needle down, playing), "busy" (arm on its way)
   const b = $("spinPlay"); if (!b) return;
   b.setAttribute("aria-busy", state === "busy" ? "true" : "false");
-  $("spinPlayIcon").textContent = state === "pause" ? "\u275A\u275A" : "\u25B6";
-  b.setAttribute("aria-label", state === "pause" ? "Pause the preview" : "Play a 30-second preview");
+  b.setAttribute("aria-pressed", state === "pause" ? "true" : "false");
+  b.setAttribute("aria-label", state === "pause" ? "Lift the needle: pause the preview" : "Drop the needle: play a 30-second preview");
+  const d = spinPreviewFor, line = $("spinPreview");
+  if (d && line) {
+    const src = Object.assign(document.createElement("a"), { href: d.link || "#", textContent: d.source, target: "_blank", rel: "noopener" });
+    const what = d.fallback ? "\u201c" + d.title + "\u201d, " : "";
+    line.replaceChildren(state === "pause" ? "Playing " + what + "30 sec via " : "Tap the arm: " + what + "30 sec via ", src);
+  }
 }
 function stopPreview() {
   if (spinAudio && !spinAudio.paused) spinAudio.pause();
@@ -2230,7 +2245,7 @@ async function loadSpinPreview(p, chosenByVisitor) {
   spinKeepPlaying = spinCarry || (!!spinAudio && !spinAudio.paused); // were they listening? then keep the music going
   spinCarry = false;
   stopPreview();
-  spinPreviewFor = null; line.hidden = true; line.replaceChildren(); btn.hidden = true;
+  spinPreviewFor = null; line.hidden = true; line.replaceChildren(); btn.disabled = true;
   if (!API_URL || sample || !spinAudio) return;
   const k = seenKey(p);
   let d = previewCache.get(k);
@@ -2245,9 +2260,8 @@ async function loadSpinPreview(p, chosenByVisitor) {
   if (d.found) {
     spinSkips = 0;
     spinPreviewFor = d;
-    btn.hidden = false;
-    const src = Object.assign(document.createElement("a"), { href: d.link || "#", textContent: d.source, target: "_blank", rel: "noopener" });
-    line.append(d.fallback ? "30-second preview of \u201c" + d.title + "\u201d via " : "30-second preview via ", src);
+    btn.disabled = false;
+    setPlayButton("play");
     line.hidden = false;
     if (spinKeepPlaying) playPreview();
     return;
