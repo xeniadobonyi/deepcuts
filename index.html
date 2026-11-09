@@ -188,28 +188,18 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .spin-source { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .spin-body { display: flex; gap: 16px; align-items: center; }
 .spin-deck { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
-/* The tonearm: tap it to drop the needle and play a 30-second preview; tap again to lift it.
-   At rest it sits off the record on the right; while playing it swings onto the outer grooves. */
-.spin-deck { width: 150px; }
-.spin-deck .spin-disc { width: 120px; height: 120px; }
-.arm { position: absolute; left: 114px; top: 0; width: 44px; height: 112px; border: 0; padding: 0; background: none; cursor: pointer; }
-.arm:disabled { cursor: default; }
-/* The arm's pivot is the play button: a black circle with a pink ▶, which turns into ❚❚ while the needle is down. */
-.arm-pivot { position: absolute; left: 10px; top: -2px; width: 24px; height: 24px; border-radius: 50%; background: #111; border: 1px solid #111; box-sizing: border-box; box-shadow: 0 0 0 2px var(--surface); display: flex; align-items: center; justify-content: center; }
-.arm-pivot::before { content: ""; margin-left: 2px; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent var(--pink); }
-.arm[aria-pressed="true"] .arm-pivot::before { margin-left: 0; width: 2.5px; height: 9px; border: 0; border-left: 2.5px solid var(--pink); border-right: 2.5px solid var(--pink); padding-left: 2px; }
-.arm:disabled .arm-pivot { background: var(--surface); border-color: var(--fg); }
-.arm:disabled .arm-pivot::before { border-left-color: var(--muted); }
-.arm:not(:disabled):hover .arm-pivot, .arm:focus-visible .arm-pivot { transform: scale(1.08); }
-.arm-rod { position: absolute; left: 20.5px; top: 10px; width: 3px; height: 80px; background: var(--fg); box-shadow: 0 0 0 1px var(--surface); transform-origin: 1.5px 0; transform: rotate(-6deg); transition: transform .7s cubic-bezier(.3, .1, .2, 1); }
-.arm-head { position: absolute; left: -3px; bottom: -14px; width: 9px; height: 15px; background: var(--pink); border: 1px solid var(--fg); box-sizing: border-box; }
-.arm[aria-pressed="true"] .arm-rod { transform: rotate(21deg); }
-.arm[aria-busy="true"] .arm-rod { transform: rotate(8deg); }
-.arm:not(:disabled):hover .arm-rod { transform: rotate(-2deg); }
-.arm[aria-pressed="true"]:hover .arm-rod { transform: rotate(19deg); }
-.arm:disabled .arm-head { background: var(--surface); }
-.arm:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .arm-rod { transition: none; } }
+/* Play/pause sits just before the song's name: a black circle with a pink ▶, ❚❚ while playing. */
+.spin-titlerow { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
+.play { flex-shrink: 0; width: 28px; height: 28px; margin-top: -2px; border-radius: 50%; background: #111; border: 1px solid #111; padding: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.play::before { content: ""; margin-left: 3px; border-style: solid; border-width: 6px 0 6px 9px; border-color: transparent transparent transparent var(--pink); }
+.play[aria-pressed="true"]::before { margin-left: 0; width: 3px; height: 11px; border: 0; border-left: 3px solid var(--pink); border-right: 3px solid var(--pink); padding-left: 2.5px; }
+.play[aria-busy="true"] { opacity: .7; }
+.play:hover { transform: scale(1.08); }
+.play:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.play[hidden] { display: none; }
+/* The record only turns while the preview plays, and stops where it is when paused. */
+.spin .spin-disc { animation-play-state: paused; }
+.spin.playing .spin-disc { animation-play-state: running; }
 .spin-preview { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .spin-preview a { color: inherit; }
 
@@ -227,7 +217,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .spin-body { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "deck name" "deck meta" "deck why" "deck react"; column-gap: 18px; row-gap: 6px; align-items: start; align-content: center; }
 .spin-deck { grid-area: deck; align-self: center; }
 .spin-info { display: contents; }
-.spin-name { grid-area: name; } .spin-meta { grid-area: meta; } .spin-info .spin-why { grid-area: why; } .spin-info .react { grid-area: react; }
+.spin-titlerow { grid-area: name; } .spin-meta { grid-area: meta; } .spin-info .spin-why { grid-area: why; } .spin-info .react { grid-area: react; }
 .spin-meta .rarity-on { color: var(--fg); letter-spacing: .08em; } .spin-meta .rarity-off { opacity: .45; letter-spacing: .08em; }
 .spin-meta .spin-counts a { color: inherit; }
 .spin-sep { white-space: pre; } .spin-meter { white-space: nowrap; }
@@ -334,10 +324,9 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="spin-body">
       <div class="spin-deck">
         <div class="spin-disc" id="spinDisc" aria-hidden="true"><div class="spin-label" id="spinLabel"></div><div class="spin-hole"></div></div>
-        <button type="button" class="arm" id="spinPlay" aria-label="Play a 30-second preview" aria-pressed="false" disabled><span class="arm-rod" aria-hidden="true"><span class="arm-head"></span></span><span class="arm-pivot" aria-hidden="true"></span></button>
       </div>
       <div class="spin-info">
-        <p class="spin-name" id="spinName"></p>
+        <div class="spin-titlerow"><button type="button" class="play" id="spinPlay" aria-label="Play a 30-second preview" aria-pressed="false" hidden></button><p class="spin-name" id="spinName"></p></div>
         <span class="spin-meta" id="spinMeta"></span>
         <p class="spin-why" id="spinWhy"></p>
         <div class="react"><button type="button" class="chip" data-r="loved" id="spinLove" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/></svg><span id="spinLoveText">Loved it</span></button><span class="react-note" id="spinNote" aria-live="polite"></span></div>
@@ -2250,16 +2239,17 @@ const spinAudio = typeof Audio === "function" ? new Audio() : null;
 if (spinAudio) spinAudio.preload = "none";
 let spinPreviewFor = null, spinKeepPlaying = false, spinCarry = false, spinSkips = 0;
 const previewCache = new Map();
-function setPlayButton(state) { // "play" (arm up), "pause" (needle down, playing), "busy" (arm on its way)
+function setPlayButton(state) { // "play" (stopped), "pause" (playing), "busy" (starting)
   const b = $("spinPlay"); if (!b) return;
   b.setAttribute("aria-busy", state === "busy" ? "true" : "false");
   b.setAttribute("aria-pressed", state === "pause" ? "true" : "false");
-  b.setAttribute("aria-label", state === "pause" ? "Lift the needle: pause the preview" : "Drop the needle: play a 30-second preview");
+  b.setAttribute("aria-label", state === "pause" ? "Pause the preview" : "Play a 30-second preview");
+  $("spinSec").classList.toggle("playing", state === "pause");
   const d = spinPreviewFor, line = $("spinPreview");
   if (d && line) {
     const src = Object.assign(document.createElement("a"), { href: d.link || "#", textContent: d.source, target: "_blank", rel: "noopener" });
     const what = d.fallback ? "\u201c" + d.title + "\u201d, " : "";
-    line.replaceChildren(state === "pause" ? "Playing " + what + "30 sec via " : "Tap the arm: " + what + "30 sec via ", src);
+    line.replaceChildren(state === "pause" ? "Playing " + what + "30 sec via " : "Press play: " + what + "30 sec via ", src);
   }
 }
 function stopPreview() {
@@ -2271,7 +2261,7 @@ async function loadSpinPreview(p, chosenByVisitor) {
   spinKeepPlaying = spinCarry || (!!spinAudio && !spinAudio.paused); // were they listening? then keep the music going
   spinCarry = false;
   stopPreview();
-  spinPreviewFor = null; line.hidden = true; line.replaceChildren(); btn.disabled = true;
+  spinPreviewFor = null; line.hidden = true; line.replaceChildren(); btn.disabled = true; btn.hidden = true;
   if (!API_URL || sample || !spinAudio) return;
   const k = seenKey(p);
   let d = previewCache.get(k);
@@ -2286,7 +2276,7 @@ async function loadSpinPreview(p, chosenByVisitor) {
   if (d.found) {
     spinSkips = 0;
     spinPreviewFor = d;
-    btn.disabled = false;
+    btn.disabled = false; btn.hidden = false;
     setPlayButton("play");
     line.hidden = false;
     if (spinKeepPlaying) playPreview();
