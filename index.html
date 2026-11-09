@@ -55,6 +55,8 @@ body {
 .wrap > * + * { border-top: 1px solid var(--fg); padding-top: 22px; }
 .sec-title { font-size: 18px; font-weight: 700; margin: 0 0 4px; }
 header { display: flex; flex-direction: column; gap: 2px; }
+.brand-link, .brand-link:visited, .brand-link:hover { color: inherit; text-decoration: none; }
+.brand-link:focus-visible { outline: 2px solid var(--fg); outline-offset: 4px; }
 .brand { font-size: clamp(36px, 9vw, 52px); line-height: 1; font-weight: 700; letter-spacing: -0.04em; color: var(--pink); margin: 0 0 6px; white-space: nowrap; }
 .tagline { margin: 0; max-width: 52ch; }
 .label { font-size: 15px; color: var(--muted); }
@@ -268,7 +270,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 
 <div class="wrap">
   <header>
-    <h1 class="brand">deep cuts</h1>
+    <h1 class="brand"><a href="/" id="brandLink" class="brand-link">deep cuts</a></h1>
     <p class="tagline">Discover new music, build your record crates.</p>
   </header>
 
@@ -2286,6 +2288,9 @@ $("spinLove").onclick = () => {
   $("spinNote").textContent = undo ? "Removed from your crate." : "Saved to your crate." + (lv > levelBefore ? " Level up: " + LEVELS[lv].name + "!" : "");
 };
 $("spinNext").onclick = () => (spinAt < spinTrail.length - 1 ? renderSpin(spinTrail[++spinAt]) : renderSpin());
+// The wordmark starts the page afresh: same address, without a shared crate or anything after "#".
+$("brandLink").href = location.pathname + location.search;
+$("brandLink").addEventListener("click", (e) => { e.preventDefault(); if (location.hash) location.assign(location.pathname + location.search); else location.reload(); });
 $("spinPrev").onclick = () => { if (spinAt > 0) renderSpin(spinTrail[--spinAt]); };
 $("spinDig").onclick = () => { if (spinNow) digFromRecords([spinNow]); };
 
