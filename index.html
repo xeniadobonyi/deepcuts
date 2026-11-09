@@ -194,7 +194,13 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .spin-deck .spin-disc { width: 120px; height: 120px; }
 .arm { position: absolute; left: 114px; top: 0; width: 44px; height: 112px; border: 0; padding: 0; background: none; cursor: pointer; }
 .arm:disabled { cursor: default; }
-.arm-pivot { position: absolute; left: 15px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--fg); box-shadow: 0 0 0 3px var(--surface), 0 0 0 4px var(--fg); }
+/* The arm's pivot is the play button: a pink circle with ▶, which turns into ❚❚ while the needle is down. */
+.arm-pivot { position: absolute; left: 10px; top: -2px; width: 24px; height: 24px; border-radius: 50%; background: var(--pink); border: 1px solid #111; box-sizing: border-box; box-shadow: 0 0 0 2px var(--surface); display: flex; align-items: center; justify-content: center; }
+.arm-pivot::before { content: ""; margin-left: 2px; border-style: solid; border-width: 5px 0 5px 8px; border-color: transparent transparent transparent #111; }
+.arm[aria-pressed="true"] .arm-pivot::before { margin-left: 0; width: 2.5px; height: 9px; border: 0; border-left: 2.5px solid #111; border-right: 2.5px solid #111; padding-left: 2px; }
+.arm:disabled .arm-pivot { background: var(--surface); }
+.arm:disabled .arm-pivot::before { border-left-color: var(--muted); }
+.arm:not(:disabled):hover .arm-pivot, .arm:focus-visible .arm-pivot { transform: scale(1.08); }
 .arm-rod { position: absolute; left: 20.5px; top: 10px; width: 3px; height: 80px; background: var(--fg); box-shadow: 0 0 0 1px var(--surface); transform-origin: 1.5px 0; transform: rotate(-6deg); transition: transform .7s cubic-bezier(.3, .1, .2, 1); }
 .arm-head { position: absolute; left: -3px; bottom: -14px; width: 9px; height: 15px; background: var(--pink); border: 1px solid var(--fg); box-sizing: border-box; }
 .arm[aria-pressed="true"] .arm-rod { transform: rotate(21deg); }
