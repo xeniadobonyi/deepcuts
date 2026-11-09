@@ -187,7 +187,14 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .spin-title { margin: 0; font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .spin-source { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .spin-body { display: flex; gap: 16px; align-items: center; }
-.spin-deck { width: 120px; height: 120px; flex-shrink: 0; }
+.spin-deck { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
+.spin-play { position: absolute; right: -6px; bottom: -6px; width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--surface); background: var(--pink); color: #111; font-size: 16px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+.spin-play[hidden] { display: none; }
+.spin-play:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.spin-play[aria-busy="true"] { opacity: .6; cursor: progress; }
+.spin-preview { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.spin-preview a { color: inherit; }
+
 .spin-disc { position: relative; width: 100%; height: 100%; border-radius: 50%; background: repeating-radial-gradient(circle, #1d1d1d 0 2px, #111 2px 4px); display: flex; align-items: center; justify-content: center; animation: dc-spin 6s linear infinite; }
 .spin-label { width: 46%; height: 46%; border-radius: 50%; background: var(--pink) center / cover no-repeat; overflow: hidden; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 7px; font-weight: 700; color: #111; text-align: center; line-height: 1.2; padding: 4px; box-sizing: border-box; }
 .spin-hole { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: var(--surface); }
@@ -292,12 +299,14 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <span class="spin-source" id="spinSource"></span>
     </div>
     <div class="spin-body">
-      <div class="spin-deck" aria-hidden="true">
-        <div class="spin-disc" id="spinDisc"><div class="spin-label" id="spinLabel"></div><div class="spin-hole"></div></div>
+      <div class="spin-deck">
+        <div class="spin-disc" id="spinDisc" aria-hidden="true"><div class="spin-label" id="spinLabel"></div><div class="spin-hole"></div></div>
+        <button type="button" class="spin-play" id="spinPlay" aria-label="Play a 30-second preview" hidden><span aria-hidden="true" id="spinPlayIcon">&#9654;</span></button>
       </div>
       <div class="spin-info">
         <p class="spin-name" id="spinName"></p>
         <span class="spin-meta" id="spinMeta"></span>
+        <span class="spin-preview" id="spinPreview" aria-live="polite" hidden></span>
         <div id="spinRarity"></div>
         <div class="react"><button type="button" class="chip" data-r="loved" id="spinLove" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/></svg><span id="spinLoveText">Loved it</span></button><span class="react-note" id="spinNote" aria-live="polite"></span></div>
       </div>
@@ -2170,6 +2179,7 @@ function renderSpin(given) {
   setSpinLove();
   findSpinSong(p);
   showSpinRarity(p);
+  loadSpinPreview(p, !!given);
   $("spinNote").textContent = "";
   $("spinSec").hidden = false;
 }
@@ -2194,6 +2204,77 @@ async function showSpinRarity(p) {
     show();
   } catch {}
 }
+// ---------- Previews: 30 seconds of the record on the turntable ----------
+// Browsers only allow sound after a tap, so the record waits for the play button. The clip comes from Deezer or
+// Apple (via /api/preview); if neither has the song, another track from the album; if neither has the album,
+// the turntable quietly moves on to another record (up to 3 times), and the links stay for the full song.
+const spinAudio = typeof Audio === "function" ? new Audio() : null;
+if (spinAudio) spinAudio.preload = "none";
+let spinPreviewFor = null, spinKeepPlaying = false, spinCarry = false, spinSkips = 0;
+const previewCache = new Map();
+function setPlayButton(state) { // "play", "pause", "busy"
+  const b = $("spinPlay"); if (!b) return;
+  b.setAttribute("aria-busy", state === "busy" ? "true" : "false");
+  $("spinPlayIcon").textContent = state === "pause" ? "\u275A\u275A" : "\u25B6";
+  b.setAttribute("aria-label", state === "pause" ? "Pause the preview" : "Play a 30-second preview");
+}
+function stopPreview() {
+  if (spinAudio && !spinAudio.paused) spinAudio.pause();
+  setPlayButton("play");
+}
+async function loadSpinPreview(p, chosenByVisitor) {
+  const btn = $("spinPlay"), line = $("spinPreview");
+  spinKeepPlaying = spinCarry || (!!spinAudio && !spinAudio.paused); // were they listening? then keep the music going
+  spinCarry = false;
+  stopPreview();
+  spinPreviewFor = null; line.hidden = true; line.replaceChildren(); btn.hidden = true;
+  if (!API_URL || sample || !spinAudio) return;
+  const k = seenKey(p);
+  let d = previewCache.get(k);
+  if (!d) {
+    try {
+      const r = await fetch("/api/preview?" + new URLSearchParams({ artist: p.artist, song: p.song || "", album: p.album || "" }));
+      d = await r.json();
+      if (d.found !== null) previewCache.set(k, d);
+    } catch { d = { found: null }; }
+  }
+  if (spinNow !== p) return; // the visitor already moved on
+  if (d.found) {
+    spinSkips = 0;
+    spinPreviewFor = d;
+    btn.hidden = false;
+    const src = Object.assign(document.createElement("a"), { href: d.link || "#", textContent: d.source, target: "_blank", rel: "noopener" });
+    line.append(d.fallback ? "30-second preview of \u201c" + d.title + "\u201d via " : "30-second preview via ", src);
+    line.hidden = false;
+    if (spinKeepPlaying) playPreview();
+    return;
+  }
+  if (d.found === false && !chosenByVisitor && spinSkips < 3) {
+    // Not on Deezer or Apple at all: pick another record, and take this one out of the Previous trail.
+    spinSkips++; spinCarry = spinKeepPlaying;
+    spinTrail.splice(spinAt, 1); spinAt = spinTrail.length - 1;
+    renderSpin();
+    return;
+  }
+  line.textContent = d.found === false ? "No preview for this one: try the links below for the full record." : "";
+  line.hidden = !line.textContent;
+}
+function playPreview() {
+  const d = spinPreviewFor; if (!d || !spinAudio) return;
+  if (spinAudio.src !== d.preview) spinAudio.src = d.preview;
+  setPlayButton("busy");
+  spinAudio.play().then(() => setPlayButton("pause")).catch(() => {
+    // Blocked or expired: drop the remembered link so the next tap asks again.
+    setPlayButton("play");
+    previewCache.delete(seenKey(spinNow));
+  });
+}
+if (spinAudio) {
+  spinAudio.addEventListener("ended", () => setPlayButton("play"));
+  spinAudio.addEventListener("pause", () => setPlayButton("play"));
+  spinAudio.addEventListener("error", () => { setPlayButton("play"); if (spinNow) previewCache.delete(seenKey(spinNow)); });
+}
+$("spinPlay").addEventListener("click", () => { if (spinAudio && !spinAudio.paused) spinAudio.pause(); else playPreview(); });
 // The browser tab icon is the record now spinning: a black disc with this record's cover as its label.
 const FAVICON_DEFAULT = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="31" fill="#111"/><circle cx="32" cy="32" r="25" fill="none" stroke="#2a2a2a" stroke-width="2"/><circle cx="32" cy="32" r="19" fill="none" stroke="#2a2a2a" stroke-width="2"/><circle cx="32" cy="32" r="13" fill="#ff2d95"/><circle cx="32" cy="32" r="2.5" fill="#ececec"/></svg>');
 function setFavicon(p, src) {
@@ -2287,7 +2368,7 @@ $("spinLove").onclick = () => {
   const lv = diggerLevel();
   $("spinNote").textContent = undo ? "Removed from your crate." : "Saved to your crate." + (lv > levelBefore ? " Level up: " + LEVELS[lv].name + "!" : "");
 };
-$("spinNext").onclick = () => (spinAt < spinTrail.length - 1 ? renderSpin(spinTrail[++spinAt]) : renderSpin());
+$("spinNext").onclick = () => { spinSkips = 0; return spinAt < spinTrail.length - 1 ? renderSpin(spinTrail[++spinAt]) : renderSpin(); };
 // The wordmark starts the page afresh: same address, without a shared crate or anything after "#".
 $("brandLink").href = location.pathname + location.search;
 $("brandLink").addEventListener("click", (e) => { e.preventDefault(); if (location.hash) location.assign(location.pathname + location.search); else location.reload(); });
