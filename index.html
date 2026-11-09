@@ -188,15 +188,16 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .spin-source { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .spin-body { display: flex; gap: 16px; align-items: center; }
 .spin-deck { position: relative; width: 120px; height: 120px; flex-shrink: 0; }
-/* Play/pause sits just before the song's name: a black circle with a pink ▶, ❚❚ while playing. */
+/* Play/pause sits on the record's edge: a black circle with a pink ▶, ❚❚ while playing. Tapping the record works too. */
 .spin-titlerow { display: flex; gap: 10px; align-items: flex-start; min-width: 0; }
-.play { flex-shrink: 0; width: 28px; height: 28px; margin-top: -2px; border-radius: 50%; background: #111; border: 1px solid #111; padding: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-.play::before { content: ""; margin-left: 3px; border-style: solid; border-width: 6px 0 6px 9px; border-color: transparent transparent transparent var(--pink); }
+.play { position: absolute; right: -4px; bottom: -4px; width: 36px; height: 36px; border-radius: 50%; background: #111; border: 0; box-shadow: 0 0 0 3px var(--surface); padding: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.play::before { content: ""; margin-left: 3px; border-style: solid; border-width: 6px 0 6px 10px; border-color: transparent transparent transparent var(--pink); }
 .play[aria-pressed="true"]::before { margin-left: 0; width: 3px; height: 11px; border: 0; border-left: 3px solid var(--pink); border-right: 3px solid var(--pink); padding-left: 2.5px; }
 .play[aria-busy="true"] { opacity: .7; }
 .play:hover { transform: scale(1.08); }
 .play:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 .play[hidden] { display: none; }
+.spin.can-play .spin-disc { cursor: pointer; }
 /* The record only turns while the preview plays, and stops where it is when paused. */
 .spin .spin-disc { animation-play-state: paused; }
 .spin.playing .spin-disc { animation-play-state: running; }
@@ -324,9 +325,10 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
     <div class="spin-body">
       <div class="spin-deck">
         <div class="spin-disc" id="spinDisc" aria-hidden="true"><div class="spin-label" id="spinLabel"></div><div class="spin-hole"></div></div>
+        <button type="button" class="play" id="spinPlay" aria-label="Play a 30-second preview" aria-pressed="false" hidden></button>
       </div>
       <div class="spin-info">
-        <div class="spin-titlerow"><button type="button" class="play" id="spinPlay" aria-label="Play a 30-second preview" aria-pressed="false" hidden></button><p class="spin-name" id="spinName"></p></div>
+        <div class="spin-titlerow"><p class="spin-name" id="spinName"></p></div>
         <span class="spin-meta" id="spinMeta"></span>
         <p class="spin-why" id="spinWhy"></p>
         <div class="react"><button type="button" class="chip" data-r="loved" id="spinLove" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.3a4.2 4.2 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/></svg><span id="spinLoveText">Loved it</span></button><span class="react-note" id="spinNote" aria-live="polite"></span></div>
@@ -2261,7 +2263,7 @@ async function loadSpinPreview(p, chosenByVisitor) {
   spinKeepPlaying = spinCarry || (!!spinAudio && !spinAudio.paused); // were they listening? then keep the music going
   spinCarry = false;
   stopPreview();
-  spinPreviewFor = null; line.hidden = true; line.replaceChildren(); btn.disabled = true; btn.hidden = true;
+  spinPreviewFor = null; line.hidden = true; line.replaceChildren(); btn.disabled = true; btn.hidden = true; $("spinSec").classList.remove("can-play");
   if (!API_URL || sample || !spinAudio) return;
   const k = seenKey(p);
   let d = previewCache.get(k);
@@ -2276,7 +2278,7 @@ async function loadSpinPreview(p, chosenByVisitor) {
   if (d.found) {
     spinSkips = 0;
     spinPreviewFor = d;
-    btn.disabled = false; btn.hidden = false;
+    btn.disabled = false; btn.hidden = false; $("spinSec").classList.add("can-play");
     setPlayButton("play");
     line.hidden = false;
     if (spinKeepPlaying) playPreview();
@@ -2307,7 +2309,9 @@ if (spinAudio) {
   spinAudio.addEventListener("pause", () => setPlayButton("play"));
   spinAudio.addEventListener("error", () => { setPlayButton("play"); if (spinNow) previewCache.delete(seenKey(spinNow)); });
 }
-$("spinPlay").addEventListener("click", () => { if (spinAudio && !spinAudio.paused) spinAudio.pause(); else playPreview(); });
+const togglePreview = () => { if (spinAudio && !spinAudio.paused) spinAudio.pause(); else playPreview(); };
+$("spinPlay").addEventListener("click", togglePreview);
+$("spinDisc").addEventListener("click", () => { if (!$("spinPlay").hidden) togglePreview(); });
 // The browser tab icon is the record now spinning: a black disc with this record's cover as its label.
 const FAVICON_DEFAULT = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="31" fill="#111"/><circle cx="32" cy="32" r="25" fill="none" stroke="#2a2a2a" stroke-width="2"/><circle cx="32" cy="32" r="19" fill="none" stroke="#2a2a2a" stroke-width="2"/><circle cx="32" cy="32" r="13" fill="#ff2d95"/><circle cx="32" cy="32" r="2.5" fill="#ececec"/></svg>');
 function setFavicon(p, src) {
