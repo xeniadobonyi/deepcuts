@@ -1,6 +1,6 @@
 # deep cuts
 
-**Find records through who made them, with the reason why.**
+**find records through who made them, with the reason why.**
 
 Live at **[digdeepcuts.com](https://digdeepcuts.com)**. Free, no sign-up, no ads.
 
