@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="deep cuts – discover new music, build your record crates. Give it a record you love and get five you haven&#39;t heard, picked from real producer, sample and label connections on MusicBrainz and Discogs. Free, no sign-up.">
+<meta name="description" content="deep cuts – find records through who made them, with the reason why. Give it a record you love and get five you haven&#39;t heard, picked from real producer, sample and label connections on MusicBrainz and Discogs. Free, no sign-up.">
 <meta name="theme-color" content="#ececec">
 <script>/* The GitHub Pages copy has no server: send visitors to the live site. */ if (/\.github\.io$/.test(location.hostname)) location.replace("https://digdeepcuts.com/" + location.hash);</script>
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -12,7 +12,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="deep cuts">
 <meta property="og:title" content="deep cuts – discover new music, build your record crates">
-<meta property="og:description" content="Discover new music, build your record crates.">
+<meta property="og:description" content="Find records through who made them, with the reason why.">
 <meta property="og:image" content="https://digdeepcuts.com/api/og?v=6">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -179,7 +179,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .crates { display: flex; flex-direction: column; gap: 28px; }
 .crate-box { display: flex; flex-direction: column; gap: 10px; }
 .crate-tag { color: var(--pink); font-weight: 700; }
-.community { margin: 0; font-size: 14px; color: var(--muted); max-width: 62ch; }
+.community { margin: 0; font-size: 14px; color: var(--muted); padding-right: max(0px, calc(100% - 62ch)); }
 .community a { color: inherit; }
 .spin { display: flex; flex-direction: column; gap: 12px; background: var(--surface); border: 1px solid var(--fg); padding: 16px; }
 .wrap > .spin { padding-top: 16px; }
@@ -248,7 +248,8 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .shared .actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; max-width: 520px; }
 .shared .actions .btn { min-height: 48px; padding: 8px 12px; font-size: 16px; font-weight: 700; }
 .how { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 62ch; }
-.faq-all { margin-top: 18px; max-width: 62ch; }
+.faq-all { margin-top: 18px; }
+.faq-all > .faq { max-width: 62ch; }
 .faq-all > summary { cursor: pointer; font-weight: 700; padding-block: 10px; border-top: 1px solid var(--rule); }
 .faq { border-top: 1px solid var(--rule); padding-block: 10px; max-width: 62ch; }
 .faq summary { cursor: pointer; font-weight: 500; }
@@ -295,7 +296,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .loved-item:last-child { border-bottom: 0; padding-bottom: 0; }
 .loved-head { display: flex; flex-direction: column; min-width: 0; }
 .loved-name { margin: 0; overflow-wrap: anywhere; }
-.foot { font-size: 13px; color: var(--muted); margin: 0; max-width: 62ch; }
+.foot { font-size: 13px; color: var(--muted); margin: 0; padding-right: max(0px, calc(100% - 62ch)); }
 </style>
 </head>
 <body>
@@ -303,7 +304,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 <div class="wrap">
   <header>
     <h1 class="brand"><a href="/" id="brandLink" class="brand-link">deep cuts</a></h1>
-    <p class="tagline">Discover new music, build your record crates.</p>
+    <p class="tagline">Find records through who made them, with the reason why.</p>
   </header>
 
   <section id="sharedSec" class="shared" hidden aria-labelledby="sharedName">
@@ -417,15 +418,17 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
       <details class="faq"><summary>How is this different from Spotify's Discover Weekly?</summary><p>Streaming recommendations learn from listening habits: what you and people like you have played. They arrive as a list, without reasons. deep cuts starts from any record or mood you choose, follows who made it, and tells you why each pick is there. Use it when you want to dig, and keep your streaming app for listening: every record links to YouTube, Spotify and Apple Music.</p></details>
       <details class="faq"><summary>Can I listen here?</summary><p>The turntable plays a 30-second preview, from Deezer or Apple Music, when one exists. For the full album, every record links to YouTube, Spotify and Apple Music.</p></details>
       <details class="faq"><summary>Why are some digs richer than others?</summary><p>A dig is only as good as the credits people have documented. Classic soul, jazz and rock are richly credited; very recent releases and some scenes less so. If a dig feels thin, try an album instead of a song, or describe a vibe.</p></details>
+      <details class="faq"><summary>How does it learn what I like?</summary><p>Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice.</p></details>
+      <details class="faq"><summary>What's the record on the turntable?</summary><p>Each visit plays a song from a great album: a hand-picked record from the shop's crate, or one your own digs found but didn't show you, so it slowly follows your taste. The record only turns while its preview plays.</p></details>
       <details class="faq"><summary>Why can a dig take half a minute?</summary><p>MusicBrainz, the open music database deep cuts reads, allows about one lookup a second. Records someone dug from recently come back much faster.</p></details>
       <details class="faq"><summary>Is my data stored?</summary><p>No accounts, no ads and no cookies. Visits are counted anonymously (Vercel Web Analytics) so I can see how the site is used. Your digs, crates and taste profile stay in this browser. What you search is sent to the AI to make the dig; deep cuts doesn&rsquo;t save it. Previews are streamed by Deezer and Apple Music.</p></details>
-      <details class="faq"><summary>Which AI is it?</summary><p>Claude Haiku (by Anthropic) chooses the five records and writes the reasons. An open model (gpt-oss) on Groq handles the behind-the-scenes steps and steps in if Claude is busy. Either way, the AI only chooses among real records the site found.</p></details>
+      <details class="faq"><summary>Which AI is it?</summary><p>Claude Haiku (by Anthropic) chooses the five records and writes the reasons. An open model (gpt-oss) on Groq handles the behind-the-scenes steps and steps in if Claude is busy. Either way, the AI only chooses among real records the site found. The reasons are written by AI, so check credits on Discogs before quoting them.</p></details>
       <details class="faq"><summary>Is it free?</summary><p>Yes: free, with no ads and no sign-up.</p></details>
     </details>
   </section>
 
   <p class="foot"><strong style="color:var(--fg)">Why deep cuts.</strong> I think taste can be acquired: you listen, you discover records, and slowly a taste forms. I built this to help me start somewhere on days I don't know what to play, and to dig deeper into artists I love. It's open source and built with AI as a coding partner.</p>
-  <p class="foot"><strong style="color:var(--fg)">How it learns.</strong> Each dig is based only on what you enter. Mark records Loved to save them to your crate; your reactions build your taste profile and make sure no record is suggested twice. <strong style="color:var(--fg)">Now spinning.</strong> Each visit plays a song from a great album: a hand-picked record from the shop's crate, or one your own digs found but didn't show you, so it slowly follows your taste. The reasons are written by AI, so check credits on Discogs before quoting them. Open source on <a href="https://github.com/xeniadobonyi/deepcuts" target="_blank" rel="noopener">GitHub</a>. Album data from MusicBrainz. Covers from the Cover Art Archive. <a href="https://www.discogs.com" target="_blank" rel="noopener">Data provided by Discogs.</a> This site uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. “Discogs” is a trademark of Zink Media, LLC.</p>
+  <p class="foot">Open source on <a href="https://github.com/xeniadobonyi/deepcuts" target="_blank" rel="noopener">GitHub</a>. Album data from MusicBrainz. Covers from the Cover Art Archive. Previews from Deezer and Apple Music. <a href="https://www.discogs.com" target="_blank" rel="noopener">Data provided by Discogs.</a> This site uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. “Discogs” is a trademark of Zink Media, LLC.</p>
   <p class="foot">Found a bug, or have an idea? Write to <a href="mailto:xenerr@gmail.com?subject=Deep%20Cuts%20feedback">xenerr@gmail.com</a>.</p>
   <p class="foot community">Every record here was found through credits and collections shared by music lovers on <a href="https://musicbrainz.org" target="_blank" rel="noopener">MusicBrainz</a> and <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>.</p>
 </div>
