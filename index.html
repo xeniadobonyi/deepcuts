@@ -316,7 +316,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
    A pink tube that always glows. As it breathes, its halo slides from pink to violet and back (8 seconds).
    No flicker; people who turn animations off get a steady glow. */
 .brand { white-space: normal; }
-.logo { display: block; width: min(380px, 82vw); height: auto;
+.logo { display: block; width: 100%; height: auto; /* the logo spans the full column */
   filter: brightness(1.06) drop-shadow(0 0 1px rgba(255,255,255,.85)) drop-shadow(0 0 4px var(--pink)) drop-shadow(0 0 10px var(--pink)) drop-shadow(0 0 22px var(--halo-55));
   animation: neon-drift 8s ease-in-out infinite; }
 @keyframes neon-drift {
@@ -329,7 +329,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 
 <div class="wrap">
   <header>
-    <h1 class="brand"><a href="/" id="brandLink" class="brand-link"><img class="logo" src="logo.png" alt="dig deep cuts" width="380" height="96"></a></h1>
+    <h1 class="brand"><a href="/" id="brandLink" class="brand-link"><img class="logo" src="logo.png" alt="dig deep cuts" width="600" height="152"></a></h1>
   </header>
 
   <section id="sharedSec" class="shared" hidden aria-labelledby="sharedName">
