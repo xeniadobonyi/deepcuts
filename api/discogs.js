@@ -31,6 +31,7 @@ module.exports = async function handler(req, res) {
   if (url.searchParams.get("find") === "1") return find(url, artist, token, send);
   if (url.searchParams.get("seed") === "1") return seedBundle(url, artist, token, send);
   if (url.searchParams.get("vibe") === "1") return vibeSearch(url, token, send);
+  if (url.searchParams.get("follow") === "1") return follow(url, token, send);
   if (!artist || !album) return send(400, { enabled: true, error: "artist and album are required" });
 
   let data;
@@ -246,4 +247,49 @@ async function vibeSearch(url, token, send) {
     }
     return send(200, { enabled: true, records: [...albums.values()].slice(0, 120) }, "public, s-maxage=21600");
   } catch { return send(503, { enabled: true, records: null }); }
+}
+
+// ---------- Following one thread: a person or a label ----------
+//   /api/discogs?follow=1&kind=artist|label&name=…&year=1980
+//   → {enabled, found, name, kind, records: [{artist, title, year, id, role}]}
+// A person: the records they made, produced or played on (Discogs' credits for that artist).
+// A label: its records, nearest in time to the year given. Albums only where Discogs says so; no compilations.
+async function follow(url, token, send) {
+  const kind = url.searchParams.get("kind") === "label" ? "label" : "artist";
+  const name = clean(url.searchParams.get("name"));
+  const year = +clean(url.searchParams.get("year")) || 0;
+  if (!name) return send(400, { enabled: true, error: "name is required" });
+  try {
+    const sr = await dcGet("/database/search?" + new URLSearchParams({ type: kind, q: name, per_page: "10" }), token);
+    if (!sr.ok) return send(503, { enabled: true, found: null });
+    const hits = (await sr.json()).results || [];
+    const hit = hits.find((x) => squash(plainName(x.title)) === squash(name)) || hits.find((x) => squash(plainName(x.title)).startsWith(squash(name)) && squash(name).length >= 5);
+    if (!hit) return send(200, { enabled: true, found: false }, "public, s-maxage=21600");
+    const seen = new Set(), records = [];
+    const keep = (x, role) => {
+      const artist = plainName(x.artist || ""), title = String(x.title || "").trim();
+      if (!artist || !title || /^various/i.test(artist)) return;
+      if (/\b(single|compilation|comp|mixed|promo|unofficial)\b/i.test(x.format || "")) return;
+      if (/greatest hits|best of|anthology|collection|essential|remixes|live at|in concert/i.test(title)) return;
+      const k = squash(artist) + "|" + squash(title.replace(/\s*[\(\[][^)\]]*[\)\]]/g, ""));
+      if (seen.has(k)) return; seen.add(k);
+      records.push({ artist, title, year: String(x.year || ""), id: x.main_release || x.id, role });
+    };
+    if (kind === "artist") {
+      const ar = await dcGet("/artists/" + hit.id + "/releases?per_page=100&sort=year&sort_order=asc", token);
+      if (!ar.ok) return send(503, { enabled: true, found: null });
+      for (const x of (await ar.json()).releases || []) {
+        const role = String(x.role || "");
+        if (/^(Main|Producer|Production|Appearance|Co-producer)$/i.test(role)) keep(x, /main/i.test(role) ? "made" : /produc/i.test(role) ? "produced" : "played on");
+      }
+      // Their production and session work first: that's where the surprising links are.
+      records.sort((a, b) => (a.role === "made") - (b.role === "made"));
+    } else {
+      const lr = await dcGet("/labels/" + hit.id + "/releases?per_page=100", token);
+      if (!lr.ok) return send(503, { enabled: true, found: null });
+      for (const x of (await lr.json()).releases || []) keep(x, "released");
+      if (year) records.sort((a, b) => Math.abs((+a.year || 0) - year) - Math.abs((+b.year || 0) - year));
+    }
+    return send(200, { enabled: true, found: records.length > 0, name: plainName(hit.title), kind, records: records.slice(0, 60) }, "public, s-maxage=21600");
+  } catch { return send(503, { enabled: true, found: null }); }
 }

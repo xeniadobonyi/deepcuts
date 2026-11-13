@@ -122,7 +122,20 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .artist::after { content: " —"; font-weight: 400; }
 .album { font-style: italic; margin: 0; overflow-wrap: anywhere; }
 .meta { flex-basis: 100%; font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.thread { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.thread { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+/* Threads to pull: the person or label in a pick's tag, and the names in its reason. Pink means "dig here";
+   blue links go to other sites. */
+.pull { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit;
+  text-decoration: underline; text-decoration-color: var(--pink); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.pull:hover { background: color-mix(in srgb, var(--pink) 14%, transparent); }
+.pull:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.thread .pull { color: var(--fg); }
+.thread .pull-arrow { color: var(--pink); }
+.trail { font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 0; }
+.trail-label { color: var(--fg); letter-spacing: .08em; margin-right: 10px; }
+.trail .pull { text-decoration-color: currentColor; text-decoration-thickness: 1px; color: var(--fg); }
+.trail-arrow { margin: 0 8px; }
+.trail-here { background: var(--pink); color: #111; padding: 1px 6px; }
 .thread::before { content: "↳ "; }
 .why { margin: 0; max-width: 62ch; }
 .rarity { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 2ch; row-gap: 2px; font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -381,6 +394,7 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
   </form>
 
   <section id="digSec" style="display:flex;flex-direction:column;gap:14px">
+    <nav class="trail" id="digTrail" aria-label="Your trail" hidden></nav>
     <div class="crate-head">
       <h2 id="crateTitle">This week's dig</h2>
       <span class="example-flag" id="exampleFlag">dug from Madvillainy, Unknown Pleasures and Hot Buttered Soul</span>
@@ -445,15 +459,15 @@ const ADV = {
 const EXAMPLE = {
   seeds: ["Madvillain – Madvillainy", "Joy Division – Unknown Pleasures", "Isaac Hayes – Hot Buttered Soul"],
   picks: [
-    { artist: "Jaylib", album: "Champion Sound", year: "2003", label: "Stones Throw", thread: "Same producer: Madlib",
+    { artist: "Jaylib", album: "Champion Sound", year: "2003", label: "Stones Throw", thread: "Same producer: Madlib", via: { t: "artist", name: "Madlib", role: "producer" }, handles: [{ t: "artist", name: "J Dilla", role: "producer" }, { t: "label", name: "Stones Throw", role: "label", year: "2003" }],
       why: "Two producers trading beats and verses over loose, dusty loops that never quite sit still. It's Madlib with J Dilla, on Stones Throw like Madvillainy." },
-    { artist: "The Durutti Column", album: "The Return of the Durutti Column", year: "1980", label: "Factory", thread: "Same producer: Martin Hannett",
+    { artist: "The Durutti Column", album: "The Return of the Durutti Column", year: "1980", label: "Factory", thread: "Same producer: Martin Hannett", via: { t: "artist", name: "Martin Hannett", role: "producer" }, handles: [{ t: "artist", name: "Vini Reilly", role: "guitar" }, { t: "label", name: "Factory", role: "label", year: "1980" }],
       why: "Vini Reilly plays guitar like it's echoing down a stairwell, all space and no drums. Martin Hannett produced it, the same hand behind Unknown Pleasures." },
-    { artist: "Public Enemy", album: "It Takes a Nation of Millions to Hold Us Back", year: "1988", label: "Def Jam", thread: "Samples Hot Buttered Soul",
+    { artist: "Public Enemy", album: "It Takes a Nation of Millions to Hold Us Back", year: "1988", label: "Def Jam", thread: "Samples Isaac Hayes", via: { t: "artist", name: "Isaac Hayes", role: "sampled" }, handles: [{ t: "artist", name: "Isaac Hayes", role: "sampled" }],
       why: "\"Black Steel in the Hour of Chaos\" is built on \"Hyperbolicsyllabicsesquedalymistic\" from Hot Buttered Soul: Isaac Hayes's slow-burning groove turned into one of hip hop's most intense records." },
-    { artist: "The Bar-Kays", album: "Soul Finger", year: "1967", label: "Volt", thread: "Same band: The Bar-Kays",
+    { artist: "The Bar-Kays", album: "Soul Finger", year: "1967", label: "Volt", thread: "Same band: The Bar-Kays", via: { t: "artist", name: "The Bar-Kays", role: "band" }, handles: [{ t: "artist", name: "Isaac Hayes", role: "band leader" }],
       why: "Two years before they played on Hot Buttered Soul, the Bar-Kays were Memphis teenagers with a party record and a horn riff everyone still knows." },
-    { artist: "Daedelus", album: "Invention", year: "2002", label: "Plug Research", thread: "Sampled on Madvillainy",
+    { artist: "Daedelus", album: "Invention", year: "2002", label: "Plug Research", thread: "Sampled by Madlib", via: { t: "artist", name: "Madlib", role: "sampled it" }, handles: [],
       why: "The loop behind Madvillainy's \"Accordion\" comes from \"Experience\" on this record. The rest is just as playful: LA electronics built from old instruments and dusty strings." }
   ]
 };
@@ -725,9 +739,12 @@ function render(picks, isExample, fresh, append) {
     firstNew = document.createElement("p"); firstNew.className = "more-head"; firstNew.textContent = picks.length + " more, one level deeper";
     crate.append(firstNew);
   } else crate.replaceChildren();
-  $("exampleFlag").hidden = !isExample;
-  $("crateTitle").textContent = isExample ? "A sample dig" : "Your dig";
-  $("digDeeper").hidden = isExample || !(current && ((current.seeds || []).length || current.mood));
+  const fl = !isExample && current?.follow?.h;
+  $("exampleFlag").hidden = !isExample && !fl;
+  $("exampleFlag").textContent = isExample ? EXAMPLE_FLAG : fl ? (fl.t === "label" ? "records on this label" : "records they made, produced or played on") : "";
+  $("crateTitle").textContent = isExample ? "A sample dig" : fl ? "Following " + fl.name : "Your dig";
+  renderTrail(isExample ? null : current?.trail);
+  $("digDeeper").hidden = isExample || !(current && ((current.seeds || []).length || current.mood || current.follow));
   picks.forEach((p) => {
     const el = document.createElement("article"); el.className = "pick" + (fresh ? " fresh" : "");
     const top = document.createElement("div"); top.className = "pick-top";
@@ -738,10 +755,48 @@ function render(picks, isExample, fresh, append) {
     meta.textContent = [p.year, p.label].filter(Boolean).join(" · ");
     names.append(h, al); if (meta.textContent) names.append(meta);
     top.append(names);
-    if (p.thread) { const t = document.createElement("span"); t.className = "thread"; t.textContent = p.thread; top.append(t); }
+    const exPrefix = isExample ? [{ kind: "example", label: "Sample dig" }] : null;
+    const pull = (h, text) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "pull"; b.textContent = text;
+      b.setAttribute("aria-label", "Follow " + h.name + ": dig " + followNoun(h));
+      b.onclick = () => followHandle(h, p, exPrefix);
+      return b;
+    };
+    // You can't follow the thread you're already on.
+    const following = current?.follow?.h && !isExample ? squash(current.follow.h.name) : "";
+    const canPull = (h) => h?.name && squash(h.name).length >= 2 && squash(h.name) !== following && (!isExample || API_URL);
+    if (p.thread) {
+      const t = document.createElement("span"); t.className = "thread";
+      const v = canPull(p.via) ? p.via : null;
+      if (!v) t.textContent = p.thread;
+      else {
+        // "Same producer: Martin Hannett →": the name is the link. If the tag doesn't name them, add the name.
+        const i = p.thread.toLowerCase().indexOf(v.name.toLowerCase());
+        if (i >= 0) t.append(p.thread.slice(0, i), pull(v, p.thread.slice(i, i + v.name.length)), p.thread.slice(i + v.name.length));
+        else t.append(p.thread + ": ", pull(v, v.name));
+        const arr = document.createElement("span"); arr.className = "pull-arrow"; arr.setAttribute("aria-hidden", "true"); arr.textContent = " \u2192";
+        t.append(arr);
+      }
+      top.append(t);
+    }
     const why = document.createElement("p"); why.className = "why";
     const whyLabel = document.createElement("strong"); whyLabel.textContent = "Why this record: ";
-    why.append(whyLabel, document.createTextNode(cleanWhy(p.why)));
+    why.append(whyLabel);
+    // Names in the reason that the site found in the credits become threads too (only those: never a guess).
+    {
+      const text = cleanWhy(p.why);
+      const via = p.via ? squash(p.via.name) : "";
+      const hs = (p.handles || []).filter((h) => canPull(h) && squash(h.name) !== via && h.name.length >= 3);
+      const hits = [];
+      for (const h of hs) {
+        const m = new RegExp("(^|[^\\p{L}\\p{N}])(" + h.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + ")(?![\\p{L}\\p{N}])", "u").exec(text);
+        if (m) { const at = m.index + m[1].length; if (!hits.some((x) => at < x.end && at + m[2].length > x.at)) hits.push({ at, end: at + m[2].length, h }); }
+      }
+      hits.sort((a, b) => a.at - b.at);
+      let pos = 0;
+      for (const x of hits) { why.append(text.slice(pos, x.at), pull(x.h, text.slice(x.at, x.end))); pos = x.end; }
+      why.append(text.slice(pos));
+    }
     const links = document.createElement("div"); links.className = "links";
     links.append(
       linkEl("YouTube", "https://www.youtube.com/results?search_query=" + q(p) + "+full+album"),
@@ -781,7 +836,12 @@ function render(picks, isExample, fresh, append) {
     });
     if (!isExample) {
       const more = document.createElement("button"); more.type = "button"; more.className = "chip"; more.textContent = "More like this";
-      more.onclick = () => digFromRecords([p]);
+      more.onclick = () => {
+        const t = (current?.trail || []).slice(), last = t[t.length - 1];
+        if (!(last?.kind === "record" && keyOf(last.rec) === keyOf(p))) t.push({ kind: "record", label: p.artist, rec: { artist: p.artist, album: p.album, year: p.year || "" } });
+        trailNext = t.slice(-6);
+        digFromRecords([p]);
+      };
       react.append(more);
     }
     const fb = document.createElement("span"); fb.className = "react-note"; fb.setAttribute("aria-live", "polite");
@@ -806,6 +866,61 @@ function render(picks, isExample, fresh, append) {
 
 let statusEl = "status"; // "Dig deeper" reports below the results instead of in the form
 let deeperNext = false;
+let followNext = null; // {h, from, trail}: the next dig follows one thread instead of the form
+let trailNext = null;  // where the next dig sits on the trail, when it continues from a pick
+const seedLabel = (list) => list.map((x) => { const { artist, album } = splitSeed(x); return album || artist; }).join(" + ");
+const EXAMPLE_FLAG = "dug from Madvillainy, Unknown Pleasures and Hot Buttered Soul";
+// The way you came: each step can be tapped to go back to it. Shown once there are two steps or more.
+function renderTrail(trail) {
+  const nav = $("digTrail");
+  nav.replaceChildren();
+  nav.hidden = !trail || trail.length < 2;
+  if (nav.hidden) return;
+  const lab = document.createElement("span"); lab.className = "trail-label"; lab.textContent = "YOUR TRAIL"; nav.append(lab);
+  trail.forEach((c, i) => {
+    if (i) { const a = document.createElement("span"); a.className = "trail-arrow"; a.setAttribute("aria-hidden", "true"); a.textContent = "\u2192"; nav.append(a); }
+    const here = i === trail.length - 1;
+    if (here || c.kind === "example") {
+      const sp = document.createElement("span"); sp.className = here ? "trail-here" : ""; sp.textContent = c.label;
+      if (here) sp.setAttribute("aria-current", "step");
+      nav.append(sp); return;
+    }
+    const b = document.createElement("button"); b.type = "button"; b.className = "pull"; b.textContent = c.label;
+    b.onclick = () => goToStep(trail, i);
+    nav.append(b);
+  });
+}
+function goToStep(trail, i) {
+  if ($("digBtn").disabled) return;
+  const c = trail[i];
+  if (c.kind === "follow") return followHandle(c.h, c.from, trail.slice(0, i));
+  if (c.kind === "record") { trailNext = trail.slice(0, i + 1); return digFromRecords([c.rec]); }
+  trailNext = trail.slice(0, i + 1);
+  if (c.kind === "vibe") { $("modeVibe").checked = true; setDigMode(); $("mood").value = c.mood; }
+  else {
+    $("modeRecords").checked = true; setDigMode();
+    const list = c.seeds || [];
+    while (seeds().length < list.length) addSeedField("");
+    seeds().forEach((inp, k) => { inp.value = list[k] || ""; });
+    updateSeedHints();
+  }
+  $("digForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  const form = $("digForm");
+  if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event("submit", { cancelable: true }));
+}
+// Start a dig along one thread (a person or a label) found on a pick.
+function followHandle(h, from, prefix) {
+  if ($("digBtn").disabled || !h?.name) return;
+  const trail = (prefix || current?.trail || []).slice();
+  const last = trail[trail.length - 1];
+  if (from && !(last?.kind === "record" && keyOf(last.rec) === keyOf(from))) trail.push({ kind: "record", label: from.artist, rec: { artist: from.artist, album: from.album, year: from.year || "" } });
+  const fromRec = from ? { artist: from.artist, album: from.album, year: from.year || "" } : null;
+  trail.push({ kind: "follow", label: h.name, h, from: fromRec });
+  followNext = { h, from: fromRec, trail: trail.slice(-6) };
+  $("digForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  const form = $("digForm");
+  if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event("submit", { cancelable: true }));
+}
 // The reasons must never carry links: drop any sentence with a web address (the AI sometimes invents them).
 const URL_RE = /\b(?:https?:\/\/|www\.)\S+|\b[\w-]+\.(?:com|org|net|io|fm)\/\S*/i;
 function cleanWhy(text) {
@@ -874,6 +989,7 @@ function buildPrompt(seedList, mood, count = 5, avoid = []) {
 }
 
 const ERR = {
+  follow_thin: "Couldn\u2019t find enough records along that thread. Try another name.",
   not_granted: "Live digging needs permission to use Claude. Reload the page to be asked again.",
   closed_today: "The shop is closed for digging until tomorrow.",
   busy: "The shop is busy right now. Try again in a minute.",
@@ -968,10 +1084,11 @@ async function gatherCandidates(seedList, onStep) {
   // Each record gets its own share of lookups, so the first record can't use them all up.
   const perSeed = Math.floor(budget / Math.max(1, seedList.length));
   let curSeed = 0, seedStart = 0;
-  const add = (c, fact, sample) => {
+  // h: the thread behind this link, a person or a label someone can follow ({t: "artist"|"label", name, role})
+  const add = (c, fact, sample, h) => {
     if (!c.artist || !c.album) return;
     const k = lc(c.artist) + "|" + lc(c.album);
-    if (!cands.has(k)) cands.set(k, { ...c, facts: [], from: [] });
+    if (!cands.has(k)) cands.set(k, { ...c, facts: [], from: [], fh: {}, handles: [] });
     const e = cands.get(k);
     if (!e.from.includes(curSeed)) e.from.push(curSeed);
     if (sample) e.sample = true;
@@ -980,6 +1097,8 @@ async function gatherCandidates(seedList, onStep) {
     if (!e.rgId && c.rgId) e.rgId = c.rgId;
     if (!e.dcId && c.dcId) e.dcId = c.dcId;
     if (fact && !e.facts.includes(fact)) e.facts.push(fact);
+    if (fact && h?.name && !e.fh[fact]) e.fh[fact] = h;
+    if (h?.name && !e.handles.some((x) => squash(x.name) === squash(h.name))) e.handles.push(h);
   };
   for (const [seedIdx, raw] of seedList.entries()) {
     curSeed = seedIdx; seedStart = calls;
@@ -1037,8 +1156,8 @@ async function gatherCandidates(seedList, onStep) {
           tags: [...(R.styles || []), ...(R.genres || [])].slice(0, 5), label: R.label ? { id: null, name: R.label } : null, src: "discogs" };
         seeds.push(seed);
         const seedName = R.song ? R.artist + "\u2019s \u201c" + R.song + "\u201d (from " + R.title + ")" : R.artist + " \u2013 " + R.title;
-        for (const x of ds.label || []) add({ artist: x.artist, album: x.title, year: x.year, label: R.label, dcId: x.id }, `Released on ${R.label}, the same label as ${seedName}`);
-        for (const pp of ds.people || []) for (const x of pp.records) add({ artist: x.artist, album: x.title, year: x.year, label: "", dcId: x.id }, `${pp.name} is credited on ${seedName} (${pp.role}) and made this record`);
+        for (const x of ds.label || []) add({ artist: x.artist, album: x.title, year: x.year, label: R.label, dcId: x.id }, `Released on ${R.label}, the same label as ${seedName}`, false, { t: "label", name: R.label, role: "label", year: R.year });
+        for (const pp of ds.people || []) for (const x of pp.records) add({ artist: x.artist, album: x.title, year: x.year, label: "", dcId: x.id }, `${pp.name} is credited on ${seedName} (${pp.role}) and made this record`, false, { t: "artist", name: pp.name, role: pp.role });
         continue;
       }
     }
@@ -1059,9 +1178,9 @@ async function gatherCandidates(seedList, onStep) {
     // Every candidate below is an album taken straight from MusicBrainz, so it is real by definition.
     // Links are followed in order of value; optional ones stop when the lookup budget runs out.
     const spare = () => calls - seedStart < perSeed;
-    const addAlbums = (groups, who, fact, max = 8) => {
+    const addAlbums = (groups, who, fact, max = 8, h) => {
       for (const g of (groups || []).filter((x) => (!x["primary-type"] || x["primary-type"] === "Album") && !(x["secondary-types"] || []).length).slice(0, max)) {
-        add({ artist: who || creditName(g["artist-credit"]), album: g.title, year: yearOf(g["first-release-date"]), label: "", rgId: g.id }, fact);
+        add({ artist: who || creditName(g["artist-credit"]), album: g.title, year: yearOf(g["first-release-date"]), label: "", rgId: g.id }, fact, false, h);
       }
     };
 
@@ -1122,7 +1241,7 @@ async function gatherCandidates(seedList, onStep) {
           const home = await sampleHome(src, sm.title);
           if (!who || !home) continue;
           add({ artist: who, album: home["release-group"].title, year: yearOf(home.date), label: "", rgId: home["release-group"].id },
-            `Sample source: \u201c${sm.by}\u201d by ${seed.artist} samples \u201c${src.title || sm.title}\u201d from this album`, true);
+            `Sample source: \u201c${sm.by}\u201d by ${seed.artist} samples \u201c${src.title || sm.title}\u201d from this album`, true, { t: "artist", name: who, role: "sampled" });
         }
       }
     }
@@ -1132,7 +1251,7 @@ async function gatherCandidates(seedList, onStep) {
       if (!spare()) break;
       onStep("Following " + pr.name + "…");
       const gr = await mbc("release-group", { artist: pr.id, type: "album", limit: 25 });
-      addAlbums(gr?.["release-groups"], pr.name, `${pr.name} is credited on ${seedName} (${pr.role}) and made this album`, 6);
+      addAlbums(gr?.["release-groups"], pr.name, `${pr.name} is credited on ${seedName} (${pr.role}) and made this album`, 6, { t: "artist", name: pr.name, role: pr.role });
     }
 
     // Band members, collaborators, and the other bands those members play in (side projects)
@@ -1140,7 +1259,7 @@ async function gatherCandidates(seedList, onStep) {
       if (!spare()) break;
       onStep("Checking " + rr.artist.name + "…");
       const gr = await mbc("release-group", { artist: rr.artist.id, type: "album", limit: 25 });
-      addAlbums(gr?.["release-groups"], rr.artist.name, `${rr.artist.name} is linked to ${seed.artist} (${rr.type})`);
+      addAlbums(gr?.["release-groups"], rr.artist.name, `${rr.artist.name} is linked to ${seed.artist} (${rr.type})`, 8, { t: "artist", name: rr.artist.name, role: rr.type });
       if (!spare()) break;
       const ma = await mbc("artist/" + rr.artist.id, { inc: "artist-rels" });
       const sides = (ma?.relations || []).filter((r) => r.artist && !insiders.has(r.artist.id) && /member of band|collaboration|subgroup/i.test(r.type || "")).slice(0, 2);
@@ -1148,7 +1267,7 @@ async function gatherCandidates(seedList, onStep) {
         if (!spare()) break;
         onStep("Following " + rr.artist.name + " into " + sd.artist.name + "…");
         const sg = await mbc("release-group", { artist: sd.artist.id, type: "album", limit: 25 });
-        addAlbums(sg?.["release-groups"], sd.artist.name, `A side project: ${rr.artist.name} of ${seed.artist} also plays in ${sd.artist.name}`, 5);
+        addAlbums(sg?.["release-groups"], sd.artist.name, `A side project: ${rr.artist.name} of ${seed.artist} also plays in ${sd.artist.name}`, 5, { t: "artist", name: rr.artist.name, role: "member" });
       }
     }
 
@@ -1171,7 +1290,7 @@ async function gatherCandidates(seedList, onStep) {
       if (!seed.bigLabel) rows.sort((a, b) => Math.abs(+a.year - +seed.year || 0) - Math.abs(+b.year - +seed.year || 0))
         .filter((x, i, a) => a.findIndex((y) => lc(y.artist) === lc(x.artist)) === i)
         .slice(0, 6)
-        .forEach((x) => add(x, `Released on ${seed.label.name}, the same label as ${seedName}`));
+        .forEach((x) => add(x, `Released on ${seed.label.name}, the same label as ${seedName}`, false, { t: "label", name: seed.label.name, role: "label", year: seed.year }));
     }
 
     // Sister labels (imprints and parent labels) from the same era
@@ -1188,7 +1307,7 @@ async function gatherCandidates(seedList, onStep) {
           const y = yearOf(r.date || g["first-release-date"]);
           if (seed.year && y && Math.abs(+y - +seed.year) > 10) continue;
           add({ artist: creditName(r["artist-credit"]), album: g.title, year: y, label: sister.label.name, rgId: g.id },
-            `Released on ${sister.label.name}, a sister label of ${seed.label.name} (${seedName})`);
+            `Released on ${sister.label.name}, a sister label of ${seed.label.name} (${seedName})`, false, { t: "label", name: sister.label.name, role: "label", year: seed.year });
         }
       }
     }
@@ -1286,7 +1405,7 @@ function buildDataPrompt(seeds, mood, pool) {
   ].filter(Boolean).join("\n");
 }
 
-function pickFromPool(res, pool, max = 5) {
+function pickFromPool(res, pool, max = 5, perArtist = 1) {
   let arr = res;
   if (!Array.isArray(arr) && arr && typeof arr === "object") arr = Object.values(arr).find(Array.isArray) || [];
   if (!Array.isArray(arr)) return [];
@@ -1295,13 +1414,14 @@ function pickFromPool(res, pool, max = 5) {
     if (!o || typeof o !== "object") continue;
     const id = Number(o.id ?? o.number ?? o.candidate ?? o.index);
     const c = pool[id - 1];
-    if (!c || artists.has(lc(c.artist))) continue;
-    artists.add(lc(c.artist));
+    if (!c || artists.has(id) || out.filter((x) => lc(x.artist) === lc(c.artist)).length >= perArtist) continue;
+    artists.add(id);
     out.push({
       artist: c.artist, album: c.album, year: c.year || "", label: c.label || "",
       thread: String(o.thread || "").trim(), why: cleanWhy(o.why || o.reason),
       rgId: c.rgId || "", cover: c.rgId ? "https://coverartarchive.org/release-group/" + c.rgId + "/front-250" : "",
       verified: c.rgId || c.dcId ? true : null, facts: c.facts, dcId: c.dcId || "",
+      via: (c.fh || {})[(c.facts || [])[0]] || null, handles: (c.handles || []).slice(0, 4),
       dc: c.dc || (c.dcId ? { url: "https://www.discogs.com/release/" + c.dcId, have: 0, want: 0, at: 0 } : null)
     });
     if (out.length === max) break;
@@ -1395,6 +1515,36 @@ async function discogsAsk(params) {
     if (d?.enabled === false) { discogsOn = false; return null; }
     return d;
   } catch (e) { if (e?.name === "AbortError") throw { code: "cancelled" }; return null; }
+}
+// ---------- Following one thread ----------
+// A pick's tag ("Same producer: Martin Hannett") and the names in its reason are threads to pull:
+// following one digs the records that person made, produced or played on, or that label released.
+const followNoun = (h) => h.t === "label" ? "records on " + h.name : "records " + h.name + " made, produced or played on";
+async function gatherFollow(h, onStep) {
+  onStep((h.t === "label" ? "Browsing the " + h.name + " catalogue" : "Following " + h.name + " through the credits") + "\u2026");
+  const d = await discogsAsk({ follow: "1", kind: h.t, name: h.name, year: h.year || "" });
+  if (!d?.found) return [];
+  const name = d.name || h.name;
+  const fact = (r) => h.t === "label" ? "Released on " + name
+    : r.role === "made" ? name + " made this record" : r.role === "produced" ? name + " produced this record" : name + " plays on this record";
+  return (d.records || []).map((r) => ({ artist: r.artist, album: r.title, year: r.year, label: h.t === "label" ? name : "", dcId: r.id,
+    facts: [fact(r)], from: [0], fh: {}, handles: [], role: r.role }));
+}
+function buildFollowPrompt(h, from, pool) {
+  return [
+    "You are Deep Cuts, a music discovery guide for people who want to find great records they have not heard yet.",
+    "The listener is following one thread: " + (h.t === "label" ? "the label " + h.name : h.name + (h.role && h.role !== "label" ? " (" + h.role + ")" : "")) + (from ? ", which they found on " + from.artist + " \u2013 " + from.album : "") + ".",
+    "Candidate albums along that thread, from Discogs:",
+    ...pool.slice(0, PROMPT_POOL).map((c, i) => candLine(c, i)),
+    "Rules:",
+    "- Choose 8 candidates, by number, from this list only, ranked best first. At most 2 by the same artist.",
+    pool.some((c) => tierOf(c)) ? "- Mix well-known records with rarer ones. Within each, choose the most accomplished records: the ones critics and collectors rate highest." : "- Favour the most rewarding records, not just the famous ones.",
+    "- Prefer proper studio albums over reissues.",
+    "- The connection you describe must come from the facts listed for that candidate. Do not add credits, samples, labels or places that are not listed. You may describe how the record sounds.",
+    WHY_STYLE + "\n  Say what " + h.name + " brings to this record.",
+    "- \"thread\": 2 to 3 words naming the connection, e.g. \"Produced it\", \"Plays bass\", \"Same label\", \"Their own record\". Never guess anyone\u2019s gender: no he, she, his or her unless the facts say so.",
+    'Reply with only a JSON array: [{"id": number, "thread": string, "why": string}]'
+  ].join("\n");
 }
 let seedFacts = []; // what's known about the listener's records, also given to the AI when it digs on its own
 
@@ -1809,6 +1959,8 @@ $("digForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   closeSuggest();
   const deeper = deeperNext && !!current; deeperNext = false;
+  const follow = followNext; followNext = null;
+  const trailStart = trailNext; trailNext = null;
   digDepth = deeper ? (current.depth || 0) + 1 : 0;
   lastPool = [];
   seedFacts = [];
@@ -1816,13 +1968,13 @@ $("digForm").addEventListener("submit", async (e) => {
   $(deeper ? "status" : "deepStatus").textContent = "";
   // One mode at a time: records follow real links, a vibe is matched on its keywords.
   const vibeMode = digMode() === "vibe";
-  const seedList = vibeMode ? [] : seeds().map((s) => s.value.trim()).filter(Boolean).slice(0, MAX_SEEDS);
-  const mood = vibeMode ? $("mood").value.trim() : "";
-  if (!vibeMode && !seedList.length) { setStatus("Add an album, a song or an artist you love, then dig.", true); seeds()[0].focus(); return; }
-  if (vibeMode && !mood) { setStatus("Describe a vibe, like \u201cBrazilian jazz\u201d or \u201crainy Sunday\u201d, then dig.", true); $("mood").focus(); return; }
+  const seedList = follow ? [] : vibeMode ? [] : seeds().map((s) => s.value.trim()).filter(Boolean).slice(0, MAX_SEEDS);
+  const mood = follow ? "" : vibeMode ? $("mood").value.trim() : "";
+  if (!follow && !vibeMode && !seedList.length) { setStatus("Add an album, a song or an artist you love, then dig.", true); seeds()[0].focus(); return; }
+  if (!follow && vibeMode && !mood) { setStatus("Describe a vibe, like \u201cBrazilian jazz\u201d or \u201crainy Sunday\u201d, then dig.", true); $("mood").focus(); return; }
   if (!aiReady()) { setStatus(ERR.no_ai, true); renderKeyBox(); if (OWNER_TEST) $("apiKey").focus(); return; }
   if (limited() && digsUsed() >= DIGS_PER_DAY) { setStatus(VISITOR_LIMIT_MSG, true); return; }
-  store.set("dc-form", { seeds: seeds().map((s) => s.value).filter((v) => v.trim()), mood: $("mood").value.trim(), mode: digMode() });
+  if (!follow) store.set("dc-form", { seeds: seeds().map((s) => s.value).filter((v) => v.trim()), mood: $("mood").value.trim(), mode: digMode() });
   ctl = new AbortController();
   $("digBtn").disabled = true; $("stopBtn").hidden = false;
   setStatus("Digging through the crates… this can take up to a minute.");
@@ -1844,7 +1996,26 @@ $("digForm").addEventListener("submit", async (e) => {
     // On the public site every pick is checked against MusicBrainz.
     const verify = !!API_URL && !sample;
     let picks = [], fromData = false;
-    if (verify && seedList.length) {
+    if (follow) {
+      // Following one thread: only records along it, and the AI only chooses among them and explains.
+      if (!verify) throw { code: "follow_thin" };
+      let pool = await gatherFollow(follow.h, (msg) => setStatus(msg));
+      { const S = seenSets(); const shown = new Set((current?.picks || []).map(seenKey)); pool = pool.filter((c) => !S.keys.has(seenKey(c)) && !shown.has(seenKey(c))); }
+      lastPool = pool;
+      if (pool.length < 3) throw { code: "follow_thin" };
+      setStatus("Checking how rare each record is on Discogs\u2026");
+      await discogsRarity(pool, 24);
+      setStatus("Choosing the best five along " + follow.h.name + "\u2019s thread\u2026");
+      target = 8;
+      let res;
+      try { res = await askClaude(buildFollowPrompt(follow.h, follow.from, pool), { signal: ctl.signal, onText }); }
+      catch (e2) { if (e2?.code !== "invalid_json") throw e2; }
+      picks = res ? pickFromPool(res, pool, 8, 2) : [];
+      if (picks.length >= 5 && picks.some((p) => tierOf(p))) picks = selectMix(picks);
+      picks = picks.slice(0, 5);
+      if (picks.length < 3) throw { code: "follow_thin" };
+      fromData = true;
+    } else if (verify && seedList.length) {
       // Records given: find real candidates through MusicBrainz links, then let the AI choose and explain.
       try {
         const { seeds: seedInfo, candidates } = await gatherCandidates(seedList, (msg) => setStatus(msg));
@@ -1934,17 +2105,20 @@ $("digForm").addEventListener("submit", async (e) => {
     bar.style.width = "100%";
     if (limited()) countDig();
     const earlier = deeper ? current.picks || [] : [];
-    current = { picks: earlier.concat(picks), seeds: seedList, mood, depth: digDepth, date: new Date().toISOString() };
-    try { saveSpare(current.picks, seedList.length ? seedList.join(", ") : mood); } catch {}
+    const trail = follow ? follow.trail : deeper ? current.trail || [] : (trailStart || (seedList.length ? [{ kind: "seeds", label: seedLabel(seedList), seeds: seedList }] : [{ kind: "vibe", label: mood, mood }]));
+    current = { picks: earlier.concat(picks), seeds: seedList, mood, depth: digDepth, date: new Date().toISOString(),
+      follow: follow ? { h: follow.h, from: follow.from } : null, trail: trail.slice(-6) };
+    try { saveSpare(current.picks, follow ? follow.h.name : seedList.length ? seedList.join(", ") : mood); } catch {}
     store.set("dc-last", current);
-    digHistory.unshift({ date: new Date().toISOString(), seeds: seedList, mood, picks });
+    digHistory.unshift({ date: new Date().toISOString(), seeds: follow ? ["Following " + follow.h.name] : seedList, mood, picks });
     digHistory = digHistory.slice(0, 30);
     store.set("dc-history", digHistory);
     renderHistory();
     renderProfile();
     $("digSec").hidden = false;
     render(picks, false, true, deeper);
-    setStatus((fromData ? picks.length + (seedList.length ? " real records, each found through real credits and labels. " : " real records, found on Discogs for your vibe. ")
+    setStatus((follow ? picks.length + " real records along " + follow.h.name + "\u2019s thread. "
+      : fromData ? picks.length + (seedList.length ? " real records, each found through real credits and labels. " : " real records, found on Discogs for your vibe. ")
       : dropped ? "Only " + picks.length + " records could be confirmed as real albums, so that\u2019s all this dig shows. "
       : verify ? "Five real records dug, each checked on MusicBrainz. " : "Five records dug. ") + digsLeftNote());
     $("digBtn").textContent = "Dig again";
@@ -1968,6 +2142,13 @@ $("stopBtn").onclick = () => ctl?.abort();
 // "Dig deeper": run the same search again. Records already shown are never repeated, so it brings five new ones.
 $("digDeeper").onclick = () => {
   if (!current || $("digBtn").disabled) return;
+  if (current.follow) {
+    followNext = { ...current.follow, trail: current.trail || [] };
+    deeperNext = true;
+    const form = $("digForm");
+    if (form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event("submit", { cancelable: true }));
+    return;
+  }
   const list = (current.seeds || []).slice(0, MAX_SEEDS);
   const vibe = !list.length && !!current.mood;
   $(vibe ? "modeVibe" : "modeRecords").checked = true;
