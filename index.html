@@ -313,23 +313,25 @@ input[type=range] { width: 100%; accent-color: var(--fg); margin: 6px 0 0; }
 .loved-name { margin: 0; overflow-wrap: anywhere; }
 .foot { font-size: 13px; color: var(--muted); margin: 0; padding-right: max(0px, calc(100% - 62ch)); }
 /* ---------- The logo: a neon sign ----------
-   A pink tube that always glows. As it breathes, its halo slides from pink to violet and back (8 seconds).
-   No flicker; people who turn animations off get a steady glow. */
+   A pink tube that always glows; its halo slides from pink to violet and back (8 seconds), no flicker.
+   The glow is drawn once, into three images (the tube, a pink halo, a violet halo), and only their opacity moves.
+   Phones fade images on the graphics chip without redrawing, so it stays sharp and smooth, even while scrolling. */
 .brand { white-space: normal; }
-.logo { display: block; width: 100%; height: auto; /* the logo spans the full column */
-  filter: brightness(1.06) drop-shadow(0 0 1px rgba(255,255,255,.85)) drop-shadow(0 0 4px var(--pink)) drop-shadow(0 0 10px var(--pink)) drop-shadow(0 0 22px var(--halo-55));
-  animation: neon-drift 8s ease-in-out infinite; }
-@keyframes neon-drift {
-  0%, 100% { filter: brightness(1.04) drop-shadow(0 0 1px rgba(255,255,255,.8)) drop-shadow(0 0 4px var(--pink)) drop-shadow(0 0 10px var(--pink)) drop-shadow(0 0 26px var(--pink-70)); }
-  50% { filter: brightness(1.14) drop-shadow(0 0 1px #fff) drop-shadow(0 0 5px var(--pink)) drop-shadow(0 0 14px var(--orchid)) drop-shadow(0 0 40px var(--halo-90)); } }
-@media (prefers-reduced-motion: reduce) { .logo { animation: none; } }
+.logo { position: relative; display: block; width: 100%; aspect-ratio: 1200 / 305; isolation: isolate; }
+.logo img { position: absolute; left: -10.8333%; top: -42.6230%; width: 121.6667%; height: 185.2459%; max-width: none; pointer-events: none; }
+.logo .halo { will-change: opacity; transform: translateZ(0); }
+.logo .halo-pink { animation: halo-pink 8s ease-in-out infinite; }
+.logo .halo-violet { animation: halo-violet 8s ease-in-out infinite; }
+@keyframes halo-pink { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@keyframes halo-violet { 0%, 100% { opacity: .12; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .logo .halo { animation: none; } .logo .halo-violet { opacity: .5; } }
 </style>
 </head>
 <body>
 
 <div class="wrap">
   <header>
-    <h1 class="brand"><a href="/" id="brandLink" class="brand-link"><img class="logo" src="logo.png" alt="dig deep cuts" width="600" height="152"></a></h1>
+    <h1 class="brand"><a href="/" id="brandLink" class="brand-link"><span class="logo"><img class="halo halo-violet" src="logo-halo-violet.png" alt=""><img class="halo halo-pink" src="logo-halo-pink.png" alt=""><img src="logo-tube.webp" alt="dig deep cuts" width="1460" height="565"></span></a></h1>
   </header>
 
   <section id="sharedSec" class="shared" hidden aria-labelledby="sharedName">
